@@ -40,7 +40,7 @@ def search_and_download_gbd(lat_long, output_folder):
             download_url = item.get("downloadURL")
 
             if download_url:
-                local_filename = os.path.join(output_folder, f"{sanitized_title}.tiff")
+                local_filename = os.path.join(output_folder, f"{sanitized_title}.gdb")
                 print(f"Downloading {sanitized_title}...")
 
                 with requests.get(download_url, stream=True) as r:
