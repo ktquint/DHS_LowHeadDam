@@ -11,7 +11,7 @@ def sanitize_filename(filename):
 def search_and_download_dems(lat_long, output_folder):
     lat = lat_long[0]
     long = lat_long[1]
-    # bounding box 5 channel widths downstream
+    # bounding box eventually 5 channel widths downstream
     bbox = (lat - 0.005, long - 0.005, lat + 0.005, long + 0.005)
 
     products = [
@@ -32,11 +32,11 @@ def search_and_download_dems(lat_long, output_folder):
         }
 
         try:
-            # Query the API
+            # query the api
             response = requests.get(base_url, params=params)
             response.raise_for_status()
 
-            # Parse the results
+            # parse the results
             results = response.json().get("items", [])
             if not results:
                 print(f"No results found for {product} data.")
@@ -70,14 +70,10 @@ def search_and_download_dems(lat_long, output_folder):
         except requests.RequestException as e:
             print(f"Error occurred: {e}")
 
-""""
-# New York Creek Example
-new_york_creek = [-96.323409, 41.625884]
-output_folder = "./dem_data"
-search_and_download_dems(new_york_creek, output_folder)
-"""
 
 # 1/9 arc-second example
+"""
 maple = [-97.147827, 46.798457]
 output_loc = "./maple"
 search_and_download_dems(maple, output_loc)
+"""
