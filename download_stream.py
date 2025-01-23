@@ -53,9 +53,10 @@ def search_and_download_gbd(lat_long, output_folder):
                 print(f"No download URL for {title}. Skipping...")
 
         # If we successfully downloaded data for the current product, we can stop
-        break
+            break
 
     except requests.RequestException as e:
+
 
 # National Hydrography Dataset Plus High Resolution (NHDPlus HR)
 
