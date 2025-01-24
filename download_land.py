@@ -2,24 +2,38 @@ import requests
 
 
 def get_nlcd_data(lat, lon):
-    # Replace 'YOUR_API_KEY' with your actual API key
-    api_key = 'YOUR_API_KEY'
-    url = f'https://api.example.com/nlcd?lat={lat}&lon={lon}&key={api_key}'
+    # Define the URL for the NLCD API
+    url = "https://www.mrlc.gov/geoserver/mrlc_display/NLCD_Land_Cover_L48/wms"
 
-    response = requests.get(url)
+    # Define the parameters for the API request
+    params = {
+        'service': 'WMS',
+        'version': '1.1.1',
+        'request': 'GetMap',
+        'layers': 'NLCD_Land_Cover_L48',
+        'styles': '',
+        'bbox': f"{lon - 0.01},{lat - 0.01},{lon + 0.01},{lat + 0.01}",
+        'width': 256,
+        'height': 256,
+        'srs': 'EPSG:4326',
+        'format': 'image/png',
+        'transparent': 'true'
+    }
 
+    # Make the API request
+    response = requests.get(url, params=params)
+
+    # Check if the request was successful
     if response.status_code == 200:
-        data = response.json()
-        return data
+        # Save the image to a file
+        with open('nlcd_data.png', 'wb') as file:
+            file.write(response.content)
+        print("NLCD data downloaded successfully.")
     else:
-        print(f"Error: {response.status_code}")
-        return None
+        print("Failed to download NLCD data.")
 
 
 # Example usage
-latitude = 40.7128
-longitude = -74.0060
-nlcd_data = get_nlcd_data(latitude, longitude)
-
-if nlcd_data:
-    print(nlcd_data)
+latitude = 40.2338
+longitude = -111.6585
+get_nlcd_data(latitude, longitude)
