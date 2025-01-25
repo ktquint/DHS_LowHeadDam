@@ -52,7 +52,7 @@ def search_and_download_dems(lat_long, output_folder):
                 download_url = item.get("downloadURL")
 
                 if download_url:
-                    local_filename = os.path.join(output_folder, f"{sanitized_title}.tiff")
+                    local_filename = os.path.join(output_folder, f"{sanitized_title}.tif")
                     print(f"Downloading {sanitized_title}...")
 
                     with requests.get(download_url, stream=True) as r:
@@ -72,8 +72,7 @@ def search_and_download_dems(lat_long, output_folder):
 
 
 # 1/9 arc-second example
-"""
+
 maple = [-97.147827, 46.798457]
-output_loc = "./maple"
+output_loc = "/Users/kennyquintana/Documents/DEM"
 search_and_download_dems(maple, output_loc)
-"""
