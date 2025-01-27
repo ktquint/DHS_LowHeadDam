@@ -17,7 +17,7 @@
   - this program will trim the rasters (land use and dem [potentially stream if we have to] down to size).
   ## arc_inputs.py
   - this program will create the input files used in the Automated_Rating_Curve_Generator.py
-    - input files (DEM, STRM, LAND, FLOW) need to be specified & output files (VDT database)
+    - input files (DEM, STRM, LAND, FLOW) & output files (VDT database) need to be specified
   
 # DATA ANALYSIS
   ## risk_calc.py
