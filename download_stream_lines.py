@@ -2,6 +2,7 @@ import geopandas as gpd
 import requests
 import os
 
+"""
 # Base URL of the GeoPackage files
 base_url = "http://geoglows-v2.s3-website-us-west-2.amazonaws.com/streams/"
 
@@ -43,7 +44,7 @@ def search_linkno_in_gpkg(file_path, linkno_value):
 
 # Main function
 def main():
-    linkno_value = 12003308  # Replace with the specific LINKNO value you are looking for
+    linkno_value = 120686357  # Replace with the specific LINKNO value you are looking for
 
     for file_name in gpkg_files:
         try:
@@ -53,6 +54,56 @@ def main():
             download_gpkg(url, save_path)
 
             if search_linkno_in_gpkg(save_path, linkno_value):
+                print(f"LINKNO {linkno_value} found in file: {file_name}")
+                break
+        except Exception as e:
+            print(f"Error processing file {file_name}: {e}")
+    else:
+        print(f"LINKNO {linkno_value} not found in any of the specified files.")
+
+
+if __name__ == "__main__":
+    main()
+"""
+
+import subprocess
+
+
+# Base URL of the GeoPackage files
+base_url = "http://geoglows-v2.s3-website-us-west-2.amazonaws.com/streams/"
+
+# List of GeoPackage file names (you can add more file names to this list)
+gpkg_files = [
+    "streams_101.gpkg",
+    "streams_102.gpkg",
+    # Add more file names as needed
+]
+
+# Full path to the ogrinfo executable (update this path as needed)
+ogrinfo_path = "C:/path/to/ogrinfo.exe"  # Update this path to the location of ogrinfo.exe on your system
+
+
+# Function to query the GeoPackage file for a specific LINKNO value
+def query_linkno_in_gpkg(file_url, linkno_value):
+    command = [
+        ogrinfo_path,
+        file_url,
+        "-sql",
+        f"SELECT * FROM streams WHERE LINKNO = {linkno_value}"
+    ]
+    result = subprocess.run(command, capture_output=True, text=True)
+    return result.stdout
+
+
+# Main function
+def main():
+    linkno_value = 12345  # Replace with the specific LINKNO value you are looking for
+
+    for file_name in gpkg_files:
+        file_url = f"{base_url}{file_name}"
+        try:
+            output = query_linkno_in_gpkg(file_url, linkno_value)
+            if "Feature Count: 0" not in output:
                 print(f"LINKNO {linkno_value} found in file: {file_name}")
                 break
         except Exception as e:
