@@ -56,6 +56,7 @@ def search_and_download_gbd(lat_long, output_folder):
             break
 
     except requests.RequestException as e:
+        print(e)
 
 
 # National Hydrography Dataset Plus High Resolution (NHDPlus HR)
