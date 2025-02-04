@@ -10,7 +10,7 @@ def search_and_download_gbd(lat_long, output_folder):
     bbox = (lat - 0.005, long - 0.005, lat + 0.005, long + 0.005)
 
     product = "National Hydrography Dataset Plus High Resolution (NHDPlus HR)"
-
+    print(product)
     base_url = "https://tnmaccess.nationalmap.gov/api/v1/products"
 
     params = {
@@ -29,7 +29,6 @@ def search_and_download_gbd(lat_long, output_folder):
         results = response.json().get("items", [])
         if not results:
             print(f"No results found for {product} data.")
-
         print(f"Found {len(results)} results for {product} data.")
 
         os.makedirs(output_folder, exist_ok=True)
@@ -59,22 +58,25 @@ def search_and_download_gbd(lat_long, output_folder):
         print(e)
 
 
-# National Hydrography Dataset Plus High Resolution (NHDPlus HR)
+maple = [-97.147827, 46.798457]
+output_loc = "/Users/kennyquintana/Documents/DEM"
+search_and_download_gbd(maple, output_loc)
 
-# Path to the GDB file
-gdb_path = "/Users/kennyquintana/Downloads/NHDPLUS_H_1602_HU4_20220412_GDB/NHDPLUS_H_1602_HU4_20220412_GDB.gdb"
-
-# Name of the stream layer
-layer_name = "NHDFlowline"
-
-# Read the layer from the GDB file
-gdf = gpd.read_file(gdb_path, layer=layer_name)
-
-# Output path for the extracted layer
-output_path = "/Users/kennyquintana/Downloads/NHD_test.shp"
-
-# Save the extracted layer to a shapefile
-gdf.to_file(output_path)
-
-print(f"Layer {layer_name} has been extracted to {output_path}")
-
+# # National Hydrography Dataset Plus High Resolution (NHDPlus HR)
+#
+# # Path to the GDB file
+# gdb_path = "/Users/kennyquintana/Downloads/NHDPLUS_H_1602_HU4_20220412_GDB/NHDPLUS_H_1602_HU4_20220412_GDB.gdb"
+#
+# # Name of the stream layer
+# layer_name = "NHDFlowline"
+#
+# # Read the layer from the GDB file
+# gdf = gpd.read_file(gdb_path, layer=layer_name)
+#
+# # Output path for the extracted layer
+# output_path = "/Users/kennyquintana/Downloads/NHD_test.shp"
+#
+# # Save the extracted layer to a shapefile
+# gdf.to_file(output_path)
+#
+# print(f"Layer {layer_name} has been extracted to {output_path}")
