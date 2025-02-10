@@ -1,35 +1,31 @@
+# Most recent, worked but really slow (2/7/25)
 import geopandas as gpd
-import requests
-from shapely.geometry import mapping
+import os
 
-def download_gpkg(url, filename):
-    response = requests.get(url)
-    with open(filename, 'wb') as f:
-        f.write(response.content)
 
-def find_stream_in_gpkg(gpkg_file, linkno):
-    gdf = gpd.read_file(gpkg_file)
-    stream = gdf[gdf['LINKNO'] == linkno]
-    return stream
+def save_streamline_as_shapefile(gpkg_path, linkno, output_path):
+    # Read the .gpkg file
+    gdf = gpd.read_file(gpkg_path)
 
-def save_stream_as_shapefile(stream, filename):
-    stream.to_file(filename, driver='ESRI Shapefile')
+    # Filter the GeoDataFrame for the specified LINKNO
+    streamline = gdf[gdf['LINKNO'] == linkno]
 
-# URL of the GeoPackage file
-gpkg_url = "http://geoglows-v2.s3-website-us-west-2.amazonaws.com/streams.gpkg"
+    if streamline.empty:
+        print(f"No streamline found with LINKNO {linkno}")
+        return
 
-# Download the GeoPackage file
-gpkg_filename = "streams.gpkg"
-download_gpkg(gpkg_url, gpkg_filename)
+    # Save the filtered GeoDataFrame as a shapefile
+    streamline.to_file(output_path, driver='ESRI Shapefile')
+    print(f"Streamline data saved successfully to {output_path}")
 
-# Specify the LINKNO value
-linkno_value = 123456  # Replace with the actual LINKNO value
 
-# Find the stream with the specified LINKNO value
-stream = find_stream_in_gpkg(gpkg_filename, linkno_value)
+# Example usage
+gpkg_path = 'http://geoglows-v2.s3-us-west-2.amazonaws.com/streams/streams_106.gpkg'
+linkno = 120034993  # Replace with your LINKNO value
+output_path = 'data/streamline.shp'
 
-# Save the stream as a shapefile
-shapefile_filename = "stream.shp"
-save_stream_as_shapefile(stream, shapefile_filename)
+save_streamline_as_shapefile(gpkg_path, linkno, output_path)
 
-print(f"The stream with LINKNO {linkno_value} has been saved as {shapefile_filename}.")
+# This program takes a while to run from the one time I ran it; however, it seems to successfully save the streamline
+# associated with the linkno as a .shp file
+
