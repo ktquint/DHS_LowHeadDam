@@ -80,13 +80,17 @@ def search_and_download_gdb(lat, long, output_folder):
         print(e)
 
 
-def merge_tables(gdb_files, lat, lon, buffer_distance=1/3600):
+def merge_tables(gdb_files, df, buffer_distance=1/3600):
     """
     - make buffer around lat/long
     - look through all the gdbs and find the one that contains the right stream
     - load the vaa table and merge attributes
     - return the slope value
     """
+    # df is dataframe, is input from earlier code
+    # get lat, lon from dataframe
+    lat =
+    lon =
     # create a point using gage latitude and longitude
     point = Point(lon, lat)
     # create a buffer around the point
