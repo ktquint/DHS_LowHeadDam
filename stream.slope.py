@@ -16,71 +16,75 @@ def sanitize_filename(filename):
     return filename
 
 
-def search_and_download_gdb(lat, long, output_folder):
+def search_and_download_gdb(lhd_excel, output_folder):
     """
     - find the geo-database that contains the hydrography around a streamgage
     **right now the USGS api returns all the ones around it... so for now I'll grab everything
     """
-    bbox = (long - 0.0003, lat - 0.0003, long + 0.0003, lat + 0.0003)
+    df = pd.read_excel(lhd_excel, usecols=['latitude', 'longitude', 'ID'])
+    for row in df.itertuples():
+        lat = row.latitude
+        long = row.longitude
+        bbox = (long - 0.0003, lat - 0.0003, long + 0.0003, lat + 0.0003)
 
-    product = "National Hydrography Dataset Plus High Resolution (NHDPlus HR)"
-    base_url = "https://tnmaccess.nationalmap.gov/api/v1/products"
+        product = "National Hydrography Dataset Plus High Resolution (NHDPlus HR)"
+        base_url = "https://tnmaccess.nationalmap.gov/api/v1/products"
 
-    params = {
-        "bbox": f"{bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]}",
-        "datasets": product,
-        "max": 10,  # number of results to return
-        "outputFormat": "JSON"
-    }
+        params = {
+            "bbox": f"{bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]}",
+            "datasets": product,
+            "max": 10,  # number of results to return
+            "outputFormat": "JSON"
+        }
 
-    try:
-        # query the API
-        response = requests.get(base_url, params=params)
-        response.raise_for_status()
+        try:
+            # query the API
+            response = requests.get(base_url, params=params)
+            response.raise_for_status()
 
-        # parse the results
-        results = response.json().get("items", [])
-        if not results:
-            print(f"No results found for {product} data.")
-            return
+            # parse the results
+            results = response.json().get("items", [])
+            if not results:
+                print(f"No results found for {product} data.")
+                return
 
-        gdbs = []
-        for item in results:
-            if item['format'] == 'FileGDB, NHDPlus HR Rasters':
-                gdbs.append(item)
+            gdbs = []
+            for item in results:
+                if item['format'] == 'FileGDB, NHDPlus HR Rasters':
+                    gdbs.append(item)
 
-        os.makedirs(output_folder, exist_ok=True)
+            os.makedirs(output_folder, exist_ok=True)
 
-        for item in gdbs:
-            title = item.get("title", "Unnamed")
-            sanitized_title = sanitize_filename(title)  # sanitize the file name
-            download_url = item.get("downloadURL")
+            for item in gdbs:
+                title = item.get("title", "Unnamed")
+                sanitized_title = sanitize_filename(title)  # sanitize the file name
+                download_url = item.get("downloadURL")
 
-            if download_url:
-                local_zip_path = os.path.join(output_folder, f"{sanitized_title}.zip")
-                print(f"Retrieving {sanitized_title}...")
+                if download_url:
+                    local_zip_path = os.path.join(output_folder, f"{sanitized_title}.zip")
+                    print(f"Retrieving {sanitized_title}...")
 
-                with requests.get(download_url, stream=True) as r:
-                    r.raise_for_status()
-                    with open(local_zip_path, "wb") as f:
-                        for chunk in r.iter_content(chunk_size=8192):
-                            f.write(chunk)
-                # print(f"Saved to {local_zip_path}")
+                    with requests.get(download_url, stream=True) as r:
+                        r.raise_for_status()
+                        with open(local_zip_path, "wb") as f:
+                            for chunk in r.iter_content(chunk_size=8192):
+                                f.write(chunk)
+                    # print(f"Saved to {local_zip_path}")
 
-                # unzip the zip file
-                with zipfile.ZipFile(local_zip_path, 'r') as zip_ref:
-                    zip_ref.extractall(output_folder)
+                    # unzip the zip file
+                    with zipfile.ZipFile(local_zip_path, 'r') as zip_ref:
+                        zip_ref.extractall(output_folder)
 
-                # let's remove the zip file after extraction
-                os.remove(local_zip_path)
-            else:
-                print(f"No download URL for {title}. womp womp")
+                    # let's remove the zip file after extraction
+                    os.remove(local_zip_path)
+                else:
+                    print(f"No download URL for {title}. womp womp")
 
-    except requests.RequestException as e:
-        print(e)
+        except requests.RequestException as e:
+            print(e)
 
 
-def merge_tables(gdb_files, df, buffer_distance=1/3600):
+def merge_tables(df, buffer_distance=1/3600):
     """
     - make buffer around lat/long
     - look through all the gdbs and find the one that contains the right stream
@@ -88,56 +92,72 @@ def merge_tables(gdb_files, df, buffer_distance=1/3600):
     - return the slope value
     """
     # df is dataframe, is input from earlier code
-    # get lat, lon from dataframe
-    lat =
-    lon =
+    # Initialize a list to store the max slope values
+    max_slope_values = []
     # create a point using gage latitude and longitude
-    point = Point(lon, lat)
-    # create a buffer around the point
-    buffer = point.buffer(buffer_distance)
-    # initialize nhd_flowline and vaa_table
-    nhd_flowline = gpd.GeoDataFrame()
-    vaa_table = gpd.GeoDataFrame()
 
-    for gdb in gdb_files:
-        huc = gdb.split('_')[2]
-        print("Reading in NHDFlowline hydrography for Hydrologic Unit – " + huc)
-        nhd_flowline = gpd.read_file(gdb, layer='NHDFlowline', engine='fiona')
-        selected_flowlines = nhd_flowline[nhd_flowline.intersects(buffer)]
-        # reset the buffer distance
-        buffer_distance = 1/3600
+    for index, row in df.iterrows():
+        # get lat, lon from dataframe
+        lat = row['latitude']
+        lon = row['longitude']
 
-        counter = 0
-        while len(selected_flowlines) != 1:
-            counter += 1
-            if counter > 17:
-                print("Your gage is not located in Hydrologic Unit – " + huc + '... onto the next one')
+        # create a point using gage latitude and longitude
+        point = Point(lon, lat)
+        # create a buffer around the point
+        buffer = point.buffer(buffer_distance)
+        # possibly change: find a way to convert the row of geodatabase to actual gdb_files
+        gdb_files = row['geodatabase']
+        # initialize nhd_flowline and vaa_table
+        nhd_flowline = gpd.GeoDataFrame()
+        vaa_table = gpd.GeoDataFrame()
+
+        for gdb in gdb_files:
+            huc = gdb.split('_')[2]
+            print("Reading in NHDFlowline hydrography for Hydrologic Unit – " + huc)
+            nhd_flowline = gpd.read_file(gdb, layer='NHDFlowline', engine='fiona')
+            selected_flowlines = nhd_flowline[nhd_flowline.intersects(buffer)]
+            # reset the buffer distance
+            buffer_distance = 1/3600
+
+            counter = 0
+            while len(selected_flowlines) != 1:
+                counter += 1
+                if counter > 17:
+                    print("Your gage is not located in Hydrologic Unit – " + huc + '... onto the next one')
+                    break
+                if selected_flowlines.empty:
+                    buffer_distance += .1/3600
+                    buffer = point.buffer(buffer_distance)
+                    selected_flowlines = nhd_flowline[nhd_flowline.intersects(buffer)]
+                else:
+                    buffer_distance -= .1/3600
+                    buffer = point.buffer(buffer_distance)
+                    selected_flowlines = nhd_flowline[nhd_flowline.intersects(buffer)]
+
+            if len(selected_flowlines) == 1:
+                print("Reading in NHDPlusFlowlineVAA Table...")
                 break
-            if selected_flowlines.empty:
-                buffer_distance += .1/3600
-                buffer = point.buffer(buffer_distance)
-                selected_flowlines = nhd_flowline[nhd_flowline.intersects(buffer)]
-            else:
-                buffer_distance -= .1/3600
-                buffer = point.buffer(buffer_distance)
-                selected_flowlines = nhd_flowline[nhd_flowline.intersects(buffer)]
 
-        if len(selected_flowlines) == 1:
-            print("Reading in NHDPlusFlowlineVAA Table...")
-            break
+        print("Joining attributes based on NHDPlusID")
+        # sometimes the fields aren't capitalized... so we'll have to check for that
+        if 'NHDPlusID' not in nhd_flowline.columns:
+            vaa_table = gpd.read_file(gdb, layer='NHDPlusFlowlineVAA', engine='fiona', columns=['nhdplusid', 'slope'])
+            joined = selected_flowlines.merge(vaa_table, on='nhdplusid')
+            slope_value = joined['slope'].tolist()
+        else:
+            vaa_table = gpd.read_file(gdb, layer='NHDPlusFlowlineVAA', engine='fiona', columns=['NHDPlusID', 'Slope'])
+            joined = selected_flowlines.merge(vaa_table, on='NHDPlusID')
+            slope_value = joined['Slope'].tolist()
 
-    print("Joining attributes based on NHDPlusID")
-    # sometimes the fields aren't capitalized... so we'll have to check for that
-    if 'NHDPlusID' not in nhd_flowline.columns:
-        vaa_table = gpd.read_file(gdb, layer='NHDPlusFlowlineVAA', engine='fiona', columns=['nhdplusid', 'slope'])
-        joined = selected_flowlines.merge(vaa_table, on='nhdplusid')
-        slope_value = joined['slope'].tolist()
-    else:
-        vaa_table = gpd.read_file(gdb, layer='NHDPlusFlowlineVAA', engine='fiona', columns=['NHDPlusID', 'Slope'])
-        joined = selected_flowlines.merge(vaa_table, on='NHDPlusID')
-        slope_value = joined['Slope'].tolist()
-
-    return max(slope_value)
+        # Add the max slope value to the list
+        if slope_value:
+            max_slope_values.append(max(slope_value))
+        else:
+            max_slope_values.append(None)
+    # Add the max slope values to the DataFrame
+    df['Slope'] = max_slope_values
+    df.to_excel('output.xlsx', index=False)
+    return
 
 
 def find_geo_files(folder_path):
