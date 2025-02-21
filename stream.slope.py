@@ -17,12 +17,11 @@ def sanitize_filename(filename):
     return filename
 
 
-def search_and_download_gdb(lhd_excel, output_folder):
+def search_and_download_gdb(df, output_folder):
     """
     - find the geo-database that contains the hydrography around a streamgage
     **right now the USGS api returns all the ones around it... so for now I'll grab everything
     """
-    df = pd.read_excel(lhd_excel, usecols=['latitude', 'longitude', 'ID'])
     for row in df.itertuples():
         lat = row.latitude
         long = row.longitude
@@ -54,9 +53,12 @@ def search_and_download_gdb(lhd_excel, output_folder):
                 if item['format'] == 'FileGDB, NHDPlus HR Rasters':
                     gdbs.append(item)
 
+            # Make a list without duplicates of the gdbs
+            gdbs_unique = set(gdbs)
+
             os.makedirs(output_folder, exist_ok=True)
 
-            for item in gdbs:
+            for item in gdbs_unique:
                 title = item.get("title", "Unnamed")
                 sanitized_title = sanitize_filename(title)  # sanitize the file name
                 download_url = item.get("downloadURL")
