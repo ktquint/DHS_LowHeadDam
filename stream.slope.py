@@ -194,11 +194,26 @@ def extract_lat_lon_and_station_id(input_string):
     return coords[0], coords[1], str(station)
 
 
-def slope_from_lat_lon(lat, lon, output_loc):
-    search_and_download_gdb(lat, lon, output_loc)
-    gdb_paths = find_geo_files(output_loc)
-    slope = merge_tables(gdb_paths, lat, lon)
-    return slope
+def slope_from_lat_lon (streamdata):
+
+    # Read the Excel file into a DataFrame
+    df = pd.read_excel(streamdata)
+
+    # Select specific columns
+    df_clean = df[['ID', 'latitude', 'longitude', 'Width (ft)']]
+    df_gdbs = search_and_download_gdb(df_clean, './gdbs')
+    df_slopes = merge_tables(df_gdbs, './gdbs')
+    output_excel = streamdata[:-4] + '_slopes.xlsx'
+    df_slopes.to_excel(output_excel, index=False)
+    # Display the selected columns: print(selected_columns)
+
+''' def slope_lat_long (streamdata.xlsx)
+        read excel to df
+        download_gdb(df)
+            return df + list of gdb, loc of unique gdb
+        merge_tables (df2.0 , loc)
+            return df 3.0
+        save df to csu or excel'''
 
 
 gage_info = str(input("Enter gage info: "))
