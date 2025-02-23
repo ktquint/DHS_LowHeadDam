@@ -16,7 +16,8 @@ def sanitize_filename(filename):
         filename = filename.replace(char, "_")  # Replace invalid characters with '_'
     return filename
 
-
+#Make a list without duplicates of the gdbs
+gdbs_unique = set()
 def search_and_download_gdb(df, output_folder):
     """
     - find the geo-database that contains the hydrography around a streamgage
@@ -52,6 +53,7 @@ def search_and_download_gdb(df, output_folder):
             for item in results:
                 if item['format'] == 'FileGDB, NHDPlus HR Rasters':
                     gdbs.append(item)
+                    gdbs_unique.update(gbds)
 
             # Make a list without duplicates of the gdbs
             gdbs_unique = set(gdbs)
