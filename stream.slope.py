@@ -219,6 +219,80 @@ def slope_from_lat_lon (streamdata):
             return df 3.0
         save df to csu or excel'''
 
+# start of Eliana's code
+import os
+import warnings
+import requests
+import geopandas as gpd
+from io import BytesIO
+import pandas as pd
+import logging
+
+logging.basicConfig(level=logging.INFO)
+
+df_slopes = pd.read_excel("practice_download_gpkg.xlsx", usecols = ['latitude', 'longitude','ID', 'LINKNO','gpkg'])
+
+def check_linkno_in_gpkg(url, linkno_value):
+    logging.info(f"Checking URL: {url}")
+    # Suppress the RuntimeWarning
+    warnings.filterwarnings("ignore", category=RuntimeWarning, message=".*non conformant file extension.*")
+
+    # Fetch a small portion of the file to check for LINKNO value
+    response = requests.get(url, stream=True)
+    response.raise_for_status()
+
+    # Read the file into a GeoDataFrame
+    with BytesIO(response.content) as f:
+        gdf = gpd.read_file(f)
+
+    # Check if the LINKNO value exists in the GeoDataFrame
+    if linkno_value in gdf['LINKNO'].values:
+        return True
+    return False
+
+
+def download_gpkg(url, output_path):
+    response = requests.get(url)
+    response.raise_for_status()
+
+    with open(output_path, 'wb') as f:
+        f.write(response.content)
+
+
+# Example usage
+base_url = 'http://geoglows-v2.s3-us-west-2.amazonaws.com/streams/streams_'
+start_index = 101
+output_directory = 'C:/Users/Owner/Python Practice/gpkg_files_practice'  # Change this to your desired directory
+
+# Ensure the .gpkg column is of type object
+df_slopes['gpkg'] = df_slopes['gpkg'].astype(object)
+
+try:
+    for row in df_slopes.itertuples():
+        if pd.isna(row.gpkg):  # Check if the .gpkg column is empty
+            linkno_value = row.LINKNO
+            for i in range(start_index, start_index + 704):  # Adjust the range as needed
+                url = f"{base_url}{i}.gpkg"
+                try:
+                    if check_linkno_in_gpkg(url, linkno_value):
+                        output_path = os.path.join(output_directory, f"streams_{i}.gpkg")
+                        download_gpkg(url, output_path)
+                        logging.info(f"Downloaded {output_path} containing LINKNO {linkno_value}")
+
+                        # Update the .gpkg column with the name of the downloaded file
+                        df_slopes.at[row.Index, 'gpkg'] = f"streams_{i}.gpkg"
+                        break  # Exit the inner loop once the file is found and downloaded
+                except requests.HTTPError as e:
+                    logging.error(f"Failed to access {url}: {e}")
+                except Exception as e:
+                    logging.error(f"An error occurred with {url}: {e}")
+except KeyboardInterrupt:
+    logging.info("Script interrupted by user. Exiting gracefully...")
+
+# Save the updated DataFrame to a file if needed
+df_slopes.to_excel('updated_slopes.xlsx', index=False)
+# End of Eliana's code
+
 
 gage_info = str(input("Enter gage info: "))
 
