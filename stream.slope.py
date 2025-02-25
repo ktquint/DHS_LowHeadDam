@@ -16,20 +16,21 @@ def sanitize_filename(filename):
         filename = filename.replace(char, "_")  # Replace invalid characters with '_'
     return filename
 
-#Make a list without duplicates of the gdbs
-gdbs_unique = set()
+
 def search_and_download_gdb(df, output_folder):
     """
     - find the geo-database that contains the hydrography around a streamgage
-    **right now the USGS api returns all the ones around it... so for now I'll grab everything
+    **right now the USGS api returns all the surrounding ones... so for now I'll grab everything
     """
+    # Make a set of unique geodatabases
+    gdbs_unique = set()
     for row in df.itertuples():
         lat = row.latitude
-        long = row.longitude
-        bbox = (long - 0.0003, lat - 0.0003, long + 0.0003, lat + 0.0003)
+        lon = row.longitude
+        bbox = (lon - 0.0003, lat - 0.0003, lon + 0.0003, lat + 0.0003)
 
         product = "National Hydrography Dataset Plus High Resolution (NHDPlus HR)"
-        base_url = "https://tnmaccess.nationalmap.gov/api/v1/products"
+        usgs_api = "https://tnmaccess.nationalmap.gov/api/v1/products"
 
         params = {
             "bbox": f"{bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]}",
@@ -40,7 +41,7 @@ def search_and_download_gdb(df, output_folder):
 
         try:
             # query the API
-            response = requests.get(base_url, params=params)
+            response = requests.get(usgs_api, params=params)
             response.raise_for_status()
 
             # parse the results
@@ -49,15 +50,17 @@ def search_and_download_gdb(df, output_folder):
                 print(f"No results found for {product} data.")
                 return
 
-            gdbs = []
+            # clean out list of geodatabases
+            gdb_list = []
             for item in results:
+                # only add geodatabases
                 if item['format'] == 'FileGDB, NHDPlus HR Rasters':
-                    gdbs.append(item)
-                    gdbs_unique.update(gbds)
+                    # save a list of geodatabases associated with this dam's lat-lon
+                    gdb_list.append(item)
+                    # update the unique set of geodatabases
+                    gdbs_unique.update(gdb_list)
 
-            # Make a list without duplicates of the gdbs
-            gdbs_unique = set(gdbs)
-
+            # make the output folder if it doesn't already exist
             os.makedirs(output_folder, exist_ok=True)
 
             for item in gdbs_unique:
@@ -66,22 +69,22 @@ def search_and_download_gdb(df, output_folder):
                 download_url = item.get("downloadURL")
 
                 if download_url:
-                    local_zip_path = os.path.join(output_folder, f"{sanitized_title}.zip")
+                    local_zip = os.path.join(output_folder, f"{sanitized_title}.zip")
                     print(f"Retrieving {sanitized_title}...")
 
                     with requests.get(download_url, stream=True) as r:
                         r.raise_for_status()
-                        with open(local_zip_path, "wb") as f:
+                        with open(local_zip, "wb") as f:
                             for chunk in r.iter_content(chunk_size=8192):
                                 f.write(chunk)
                     # print(f"Saved to {local_zip_path}")
 
                     # unzip the zip file
-                    with zipfile.ZipFile(local_zip_path, 'r') as zip_ref:
+                    with zipfile.ZipFile(local_zip, 'r') as zip_ref:
                         zip_ref.extractall(output_folder)
 
                     # let's remove the zip file after extraction
-                    os.remove(local_zip_path)
+                    os.remove(local_zip)
                 else:
                     print(f"No download URL for {title}. womp womp")
 
@@ -91,7 +94,7 @@ def search_and_download_gdb(df, output_folder):
 
 def merge_tables(df, buffer_distance=1/3600):
     """
-    - make buffer around lat/long
+    - make buffer around lat/lon
     - look through all the gdbs and find the one that contains the right stream
     - load the vaa table and merge attributes
     - return the slope value
@@ -115,11 +118,14 @@ def merge_tables(df, buffer_distance=1/3600):
         # initialize nhd_flowline and vaa_table
         nhd_flowline = gpd.GeoDataFrame()
         vaa_table = gpd.GeoDataFrame()
+        selected_flowlines = []
+        slope_value = []
 
         for gdb in gdb_files:
             huc = gdb.split('_')[2]
             print("Reading in NHDFlowline hydrography for Hydrologic Unit – " + huc)
             nhd_flowline = gpd.read_file(gdb, layer='NHDFlowline', engine='fiona')
+            # maybe try finding flowline based on distance...
             selected_flowlines = nhd_flowline[nhd_flowline.intersects(buffer)]
             # reset the buffer distance
             buffer_distance = 1/3600
@@ -143,16 +149,16 @@ def merge_tables(df, buffer_distance=1/3600):
                 print("Reading in NHDPlusFlowlineVAA Table...")
                 break
 
-        print("Joining attributes based on NHDPlusID")
-        # sometimes the fields aren't capitalized... so we'll have to check for that
-        if 'NHDPlusID' not in nhd_flowline.columns:
-            vaa_table = gpd.read_file(gdb, layer='NHDPlusFlowlineVAA', engine='fiona', columns=['nhdplusid', 'slope'])
-            joined = selected_flowlines.merge(vaa_table, on='nhdplusid')
-            slope_value = joined['slope'].tolist()
-        else:
-            vaa_table = gpd.read_file(gdb, layer='NHDPlusFlowlineVAA', engine='fiona', columns=['NHDPlusID', 'Slope'])
-            joined = selected_flowlines.merge(vaa_table, on='NHDPlusID')
-            slope_value = joined['Slope'].tolist()
+            print("Joining attributes based on NHDPlusID")
+            # sometimes the fields aren't capitalized... so we'll have to check for that
+            if 'NHDPlusID' not in nhd_flowline.columns:
+                vaa_table = gpd.read_file(gdb, layer='NHDPlusFlowlineVAA', engine='fiona', columns=['nhdplusid', 'slope'])
+                joined = selected_flowlines.merge(vaa_table, on='nhdplusid')
+                slope_value = joined['slope'].tolist()
+            else:
+                vaa_table = gpd.read_file(gdb, layer='NHDPlusFlowlineVAA', engine='fiona', columns=['NHDPlusID', 'Slope'])
+                joined = selected_flowlines.merge(vaa_table, on='NHDPlusID')
+                slope_value = joined['Slope'].tolist()
 
         # Add the max slope value to the list
         if slope_value:
@@ -162,7 +168,7 @@ def merge_tables(df, buffer_distance=1/3600):
     # Add the max slope values to the DataFrame
     df['Slope'] = max_slope_values
     df.to_excel('output.xlsx', index=False)
-    return
+    return # a dataframe with a slope column
 
 
 def find_geo_files(folder_path):
@@ -260,7 +266,7 @@ def download_gpkg(url, output_path):
 
 
 # Example usage
-base_url = 'http://geoglows-v2.s3-us-west-2.amazonaws.com/streams/streams_'
+base_url = 'https://geoglows-v2.s3-us-west-2.amazonaws.com/streams/streams_'
 start_index = 101
 output_directory = 'C:/Users/Owner/Python Practice/gpkg_files_practice'  # Change this to your desired directory
 
@@ -293,16 +299,18 @@ except KeyboardInterrupt:
 df_slopes.to_excel('updated_slopes.xlsx', index=False)
 # End of Eliana's code
 
-
-gage_info = str(input("Enter gage info: "))
-
-latitude, longitude, station_id = extract_lat_lon_and_station_id(gage_info)
-output_folder = './' + station_id
-
-print(f'Station ID: {station_id}')
-print(f'Latitude: {latitude}')
-print(f'Longitude: {longitude}')
-
-stream_slope = slope_from_lat_lon(latitude, longitude, output_folder)
-print(f'The stream slope at USGS Station {station_id} is {stream_slope}')
+"""
+Old Test Case:
+"""
+# gage_info = str(input("Enter gage info: "))
+#
+# latitude, longitude, station_id = extract_lat_lon_and_station_id(gage_info)
+# output_folder = './' + station_id
+#
+# print(f'Station ID: {station_id}')
+# print(f'Latitude: {latitude}')
+# print(f'Longitude: {longitude}')
+#
+# stream_slope = slope_from_lat_lon(latitude, longitude, output_folder)
+# print(f'The stream slope at USGS Station {station_id} is {stream_slope}')
 
