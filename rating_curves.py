@@ -32,7 +32,7 @@ def plot_rating_curve(dbf_file, output_dir):
         a = row['depth_a']
         b = row['depth_b']
         y = a * x**b
-        plt.plot(x, y, label=f'Downstream Cross-section {row["id"]}: $y = {a:.3f} \cdot x^{{{b:.3f}}}$')
+        plt.plot(x, y, label=f'Downstream Cross-section {row["id"]}: $y = {a:.3f} x^{{{b:.3f}}}$')
 
     # Add labels and legend
     plt.xlabel('Flow (m$^{3}$/s)')
@@ -48,7 +48,7 @@ def plot_rating_curve(dbf_file, output_dir):
 
 """
 Test Case: 
-"""
+# """
 # test_dbf = "C:/Users/ki87ujmn/Downloads/rathcelon-example/results/272/VDT/272_Local_CurveFile.dbf"
 # test_output = 'C:/Users/ki87ujmn/Downloads'
 # plot_rating_curve(test_dbf, test_output)
