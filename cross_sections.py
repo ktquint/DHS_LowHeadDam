@@ -3,6 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from main import get_attribute_df
 
+
 def get_xs_df(xs_txt):
     xs_df = pd.read_csv(xs_txt, header=None, sep='\t')
     xs_df = xs_df.rename(columns={0: 'cell_comid', 1: 'row', 2: 'column',
@@ -35,6 +36,7 @@ def plot_cross_sections(attribute_df, xs_df, output_dir, in_banks):
     # this id will be used to name the output files
     lhd_id = attribute_df['lhd_id'][0]
 
+    # if we're only plotting in banks we need to trim down the xs data frame
     if in_banks:
         xs_df = get_within_banks(xs_df)
 

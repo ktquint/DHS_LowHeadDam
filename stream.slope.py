@@ -1,13 +1,14 @@
-# import all the packages we'll need
-import glob
+# i like importing based on how long they are
 import os
 import re
+import glob
+import fiona
+import zipfile
 import requests
 import pandas as pd
 import geopandas as gpd
-import fiona
 from shapely.geometry import Point
-import zipfile
+
 
 def sanitize_filename(filename):
     """replace or remove invalid characters from a file name."""
