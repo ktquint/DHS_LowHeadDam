@@ -1,19 +1,7 @@
-import ast
 import pandas as pd
+from main import get_xs_df
 import matplotlib.pyplot as plt
 from main import get_attribute_df
-
-
-def get_xs_df(xs_txt):
-    xs_df = pd.read_csv(xs_txt, header=None, sep='\t')
-    xs_df = xs_df.rename(columns={0: 'cell_comid', 1: 'row', 2: 'column',
-                                  3: 'xs_profile1', 4: 'd_wse', 5: 'd_distance_z1', 6: "manning's_n1",
-                                  7: 'xs_profile2', 8: 'd_wse', 9: 'd_distance_z2', 10: "manning's_n2"})
-    xs_df['xs_profile1'] = xs_df['xs_profile1'].apply(ast.literal_eval)
-    xs_df['xs_profile2'] = xs_df['xs_profile2'].apply(ast.literal_eval)
-    xs_df["manning's_n1"] = xs_df["manning's_n1"].apply(ast.literal_eval)
-    xs_df["manning's_n2"] = xs_df["manning's_n2"].apply(ast.literal_eval)
-    return xs_df
 
 
 def get_within_banks(xs_df):
@@ -76,6 +64,7 @@ Test Case:
 test_dbf = "C:/Users/ki87ujmn/Downloads/rathcelon-example/results/272/VDT/272_Local_CurveFile.dbf"
 test_txt = "C:/Users/ki87ujmn/Downloads/rathcelon-example/results/272\XS/272_XS_Out.txt"
 test_output = 'C:/Users/ki87ujmn/Downloads'
+
 test_att_tbl = get_attribute_df(test_dbf)
 test_df = get_xs_df(test_txt)
 plot_cross_sections(test_att_tbl, test_df, test_output, True)

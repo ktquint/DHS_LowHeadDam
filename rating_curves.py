@@ -33,7 +33,9 @@ def plot_rating_curve(attribute_df, output_dir):
 """
 Test Case: 
 """
+
 test_dbf = "C:/Users/ki87ujmn/Downloads/rathcelon-example/results/272/VDT/272_Local_CurveFile.dbf"
 test_output = 'C:/Users/ki87ujmn/Downloads'
+
 test_att_tbl = get_attribute_df(test_dbf)
 plot_rating_curve(test_att_tbl, test_output)
