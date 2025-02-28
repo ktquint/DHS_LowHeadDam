@@ -1,16 +1,43 @@
+import ast
 import pandas as pd
-import json
 import matplotlib.pyplot as plt
 from main import get_attribute_df
 
-def get_within_banks(xs_df):
-
-
-def plot_cross_section(attribute_df, xs_txt, output_dir):
+def get_xs_df(xs_txt):
     xs_df = pd.read_csv(xs_txt, header=None, sep='\t')
     xs_df = xs_df.rename(columns={0: 'cell_comid', 1: 'row', 2: 'column',
-                                  3: 'xs_profile1', 4: 'd_wse', 5: 'd_distance_z1', 6: 'mannings_n1',
-                                  7: 'xs_profile2', 8: 'd_wse', 9: 'd_distance_z2', 10: 'mannings_n2'})
+                                  3: 'xs_profile1', 4: 'd_wse', 5: 'd_distance_z1', 6: "manning's_n1",
+                                  7: 'xs_profile2', 8: 'd_wse', 9: 'd_distance_z2', 10: "manning's_n2"})
+    xs_df['xs_profile1'] = xs_df['xs_profile1'].apply(ast.literal_eval)
+    xs_df['xs_profile2'] = xs_df['xs_profile2'].apply(ast.literal_eval)
+    xs_df["manning's_n1"] = xs_df["manning's_n1"].apply(ast.literal_eval)
+    xs_df["manning's_n2"] = xs_df["manning's_n2"].apply(ast.literal_eval)
+    return xs_df
+
+
+def get_within_banks(xs_df):
+    """
+    this doesn't work yet... lol
+    """
+    # this is the manning's for flow within banks
+    mannings_n = 0.03
+    for i in range(len(xs_df)):
+        index_bank1 = len(xs_df.loc[i, "manning's_n1"]) - 1 - xs_df.loc[i, "manning's_n1"][::-1].index(mannings_n)
+        xs_df.loc[i, 'xs_profile1'] = xs_df.loc[i, 'xs_profile1'][:index_bank1]
+        xs_df.loc[i, "manning's_n1"] = xs_df.loc[i, "manning's_n1"][:index_bank1]
+        index_bank2 = len(xs_df.loc[i, "manning's_n2"]) - 1 - xs_df.loc[i, "manning's_n2"][::-1].index(mannings_n)
+        xs_df.loc[i, 'xs_profile2'] = xs_df.loc[i, 'xs_profile2'][:index_bank2]
+        xs_df.loc[i, "manning's_n2"] = xs_df.loc[i, "manning's_n2"][:index_bank2]
+    return xs_df
+
+
+def plot_cross_sections(attribute_df, xs_df, output_dir, in_banks):
+    # this id will be used to name the output files
+    lhd_id = attribute_df['lhd_id'][0]
+
+    if in_banks:
+        xs_df = get_within_banks(xs_df)
+
     xs_profile = pd.DataFrame()
     for i in range(len(attribute_df)):
         result = xs_df[(xs_df['row'] == attribute_df['row'][i]) & (xs_df['column'] == attribute_df['col'][i])]
@@ -18,11 +45,11 @@ def plot_cross_section(attribute_df, xs_txt, output_dir):
 
     for i in range(len(xs_profile)):
         # this is the cross-section elevations
-        y1 = json.loads(xs_profile['xs_profile1'].iloc[i])
+        y1 = xs_profile['xs_profile1'].iloc[i]
         # they're backwards, so let's reverse them
         y1 = y1[::-1]
         # now we'll read in the second cross-section and combine lists
-        y2 = json.loads(xs_profile['xs_profile2'].iloc[i])
+        y2 = xs_profile['xs_profile2'].iloc[i]
         y = y1 + y2
         # let's make a list of horizontal distances based on the z distance
         x = [0 + j * xs_profile['d_distance_z1'].iloc[i] for j in range(len(y))]
@@ -36,13 +63,17 @@ def plot_cross_section(attribute_df, xs_txt, output_dir):
         plt.title(f'Cross-section No. {i + 1}')
 
         # display plot
+        png_output = output_dir + f'/Cross-section No.{i+1} at LHD No.{lhd_id}.png'
+        plt.savefig(png_output, dpi=300, bbox_inches='tight')
         plt.show()
 
 """
 Test Case: 
 """
+
 test_dbf = "C:/Users/ki87ujmn/Downloads/rathcelon-example/results/272/VDT/272_Local_CurveFile.dbf"
 test_txt = "C:/Users/ki87ujmn/Downloads/rathcelon-example/results/272\XS/272_XS_Out.txt"
 test_output = 'C:/Users/ki87ujmn/Downloads'
 test_att_tbl = get_attribute_df(test_dbf)
-plot_cross_section(test_att_tbl, test_txt, test_output)
+test_df = get_xs_df(test_txt)
+plot_cross_sections(test_att_tbl, test_df, test_output, True)
