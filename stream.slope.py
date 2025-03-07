@@ -227,77 +227,53 @@ def slope_from_lat_lon (streamdata):
         save df to csu or excel'''
 
 # start of Eliana's code
-import os
-import warnings
-import requests
-import geopandas as gpd
-from io import BytesIO
-import pandas as pd
-import logging
 
-logging.basicConfig(level=logging.INFO)
+# Source of data (initial excel file) - Remove later when df_slopes is available; use this for practice runs
+file_path = "Low head Dam Info - Copy for python.xlsx"
+df_slopes = pd.read_excel(file_path, usecols=['latitude', 'longitude', 'ID', 'LINKNO', 'gpkg'])
 
-df_slopes = pd.read_excel("practice_download_gpkg.xlsx", usecols = ['latitude', 'longitude','ID', 'LINKNO','gpkg'])
-
-def check_linkno_in_gpkg(url, linkno_value):
-    logging.info(f"Checking URL: {url}")
-    # Suppress the RuntimeWarning
-    warnings.filterwarnings("ignore", category=RuntimeWarning, message=".*non conformant file extension.*")
-
-    # Fetch a small portion of the file to check for LINKNO value
-    response = requests.get(url, stream=True)
-    response.raise_for_status()
-
-    # Read the file into a GeoDataFrame
-    with BytesIO(response.content) as f:
-        gdf = gpd.read_file(f)
-
-    # Check if the LINKNO value exists in the GeoDataFrame
-    if linkno_value in gdf['LINKNO'].values:
-        return True
-    return False
-
-
-def download_gpkg(url, output_path):
+# Downloads the gpkg file later in the code
+def download_gpkg(url, local_path):
     response = requests.get(url)
-    response.raise_for_status()
-
-    with open(output_path, 'wb') as f:
+    with open(local_path, 'wb') as f:
         f.write(response.content)
 
+def gpkg_download(df_slopes):
+    # Place where gpkgs are downloaded
+    download_dir = 'all_downloaded_gpkgs'
+    os.makedirs(download_dir, exist_ok=True)
 
-# Example usage
-base_url = 'https://geoglows-v2.s3-us-west-2.amazonaws.com/streams/streams_'
-start_index = 101
-output_directory = 'C:/Users/Owner/Python Practice/gpkg_files_practice'  # Change this to your desired directory
+    #List of linknos, will just put the list into lhd
+    linknos = pd.read_csv('list_of_linkno.csv')
 
-# Ensure the .gpkg column is of type object
-df_slopes['gpkg'] = df_slopes['gpkg'].astype(object)
+    # Ensure the 'gpkg' column is of type object
+    df_slopes['gpkg'] = df_slopes['gpkg'].astype(object)
 
-try:
+    # looks through rows of the initial dataframe
     for row in df_slopes.itertuples():
-        if pd.isna(row.gpkg):  # Check if the .gpkg column is empty
-            linkno_value = row.LINKNO
-            for i in range(start_index, start_index + 704):  # Adjust the range as needed
-                url = f"{base_url}{i}.gpkg"
-                try:
-                    if check_linkno_in_gpkg(url, linkno_value):
-                        output_path = os.path.join(output_directory, f"streams_{i}.gpkg")
-                        download_gpkg(url, output_path)
-                        logging.info(f"Downloaded {output_path} containing LINKNO {linkno_value}")
+        linkno = row.LINKNO # gets linkno value of the row
 
-                        # Update the .gpkg column with the name of the downloaded file
-                        df_slopes.at[row.Index, 'gpkg'] = f"streams_{i}.gpkg"
-                        break  # Exit the inner loop once the file is found and downloaded
-                except requests.HTTPError as e:
-                    logging.error(f"Failed to access {url}: {e}")
-                except Exception as e:
-                    logging.error(f"An error occurred with {url}: {e}")
-except KeyboardInterrupt:
-    logging.info("Script interrupted by user. Exiting gracefully...")
+        if isinstance(linkno, int): # Checks if linkno is int
+            found = False
+            for column in linknos.columns: # checks thru all columns of linkno values csv
+                local_gpkg_path = os.path.join(download_dir, f"{column}.gpkg") # path to store gpkg
+                gpkg_url = f"http://geoglows-v2.s3-us-west-2.amazonaws.com/streams/{column}.gpkg" # where gpkg is downloaded from
+                if linkno in linknos[column].values: # if linkno is in the column of the gpkg
+                    if not os.path.exists(local_gpkg_path): # if wasn't already downloaded
+                        download_gpkg(gpkg_url, local_gpkg_path) # downloads
+                        df_slopes.at[row.Index, 'gpkg'] = f"{column}.gpkg" # adds gpkg name to the excel file
+                        found = True
+                        break
+                    elif os.path.exists(local_gpkg_path): # if linkno is already downloaded
+                        df_slopes.at[row.Index, 'gpkg'] = f"{column}.gpkg" # just adds gpkg name, no download
+                        found = True
+                        break
+            if not found:
+                df_slopes.at[row.Index, 'gpkg'] = "" # adds nothing if not found
 
-# Save the updated DataFrame to a file if needed
-df_slopes.to_excel('updated_slopes.xlsx', index=False)
+    df_slopes.to_excel('output_w_gpkgs.xlsx', index=False) # converts to excel file
+
+gpkg_download(df_slopes) #Works when I tested it, please check files
 # End of Eliana's code
 
 """
