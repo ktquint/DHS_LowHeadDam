@@ -42,7 +42,9 @@ def plot_cross_sections(attribute_df, xs_df, output_dir, in_banks):
         y2 = xs_profile['xs_profile2'].iloc[i]
         y = y1 + y2
         # let's make a list of horizontal distances based on the z distance
-        x = [0 + j * xs_profile['d_distance_z1'].iloc[i] for j in range(len(y))]
+        x1 = [0 + j * xs_profile['d_distance_z1'].iloc[i] for j in range(len(y1))]
+        x2 = [max(x1) + j * xs_profile['d_distance_z2'].iloc[i] for j in range(len(y2))]
+        x = x1 + x2
 
         # create the plot
         plt.plot(x, y)
@@ -67,4 +69,4 @@ test_output = 'C:/Users/ki87ujmn/Downloads'
 
 test_att_tbl = get_attribute_df(test_dbf)
 test_df = get_xs_df(test_txt)
-plot_cross_sections(test_att_tbl, test_df, test_output, True)
+plot_cross_sections(test_att_tbl, test_df, test_output, False)
