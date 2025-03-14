@@ -63,8 +63,8 @@ def plot_cross_sections(attribute_df, xs_df, output_dir, in_banks):
 Test Case: 
 """
 
-test_dbf = "C:/Users/ki87ujmn/Downloads/rathcelon-example/results/272/VDT/272_Local_CurveFile.dbf"
-test_txt = "C:/Users/ki87ujmn/Downloads/rathcelon-example/results/272\XS/272_XS_Out.txt"
+test_dbf = "C:/Users/ki87ujmn/Downloads/rathcelon-example/results/28/VDT/28_Local_CurveFile.dbf"
+test_txt = "C:/Users/ki87ujmn/Downloads/rathcelon-example/results/28/XS/28_XS_Out.txt"
 test_output = 'C:/Users/ki87ujmn/Downloads'
 
 test_att_tbl = get_attribute_df(test_dbf)

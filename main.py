@@ -1,6 +1,7 @@
 import ast
 import pandas as pd
 import dbfread as dbf
+import re
 
 def get_attribute_df(curve_dbf):
     # create attribute table based on .dbf file
@@ -9,7 +10,7 @@ def get_attribute_df(curve_dbf):
     # create id, row, col, depth_a, and depth_b lists
     id_list = list(range(1, len(attribute_table) + 1))
     row_list, col_list, depth_a, depth_b = [], [], [], []
-    lhd_id_list = [curve_dbf[-23:-20]] * len(id_list)
+    lhd_id_list = [re.sub(r'\D', '', curve_dbf[-23:-20])] * len(id_list)
 
     for attribute in attribute_table:
         row_list.append(attribute["Row"])
