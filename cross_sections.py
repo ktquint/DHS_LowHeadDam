@@ -50,9 +50,9 @@ def plot_cross_sections(attribute_df, xs_df, output_dir, in_banks):
         plt.plot(x, y)
 
         # add labels and title
-        plt.xlabel('Width (m)')
-        plt.ylabel('Height (m)')
-        plt.title(f'Cross-section No. {i + 1}')
+        plt.xlabel('Lateral Distance (m)')
+        plt.ylabel('Elevation (m)')
+        plt.title(f'Cross-section No. {i + 1} at LHD No. {lhd_id}')
 
         # display plot
         png_output = output_dir + f'/Cross-section No.{i+1} at LHD No.{lhd_id}.png'

@@ -1,7 +1,9 @@
+import re
 import ast
 import pandas as pd
 import dbfread as dbf
-import re
+import download_dem as dd
+
 
 def get_attribute_df(curve_dbf):
     # create attribute table based on .dbf file
@@ -36,3 +38,13 @@ def get_xs_df(xs_txt):
     xs_df["manning's_n1"] = xs_df["manning's_n1"].apply(ast.literal_eval)
     xs_df["manning's_n2"] = xs_df["manning's_n2"].apply(ast.literal_eval)
     return xs_df
+
+"""
+this is where the magic happens...
+"""
+
+# this is the database I'm working with:
+lhd_database = "C:/Users/ki87ujmn/Downloads/LowHead_Dam_Database.xlsx"
+# convert your database to a data_frame
+lhd_df = pd.read_excel(lhd_database)
+lhd_dem = dd.search_and_download_dems()
