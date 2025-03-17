@@ -34,6 +34,8 @@ def rathcelon_input (lhd_csv, output_loc):
     file_name = output_loc + "/input.json"
     with open(file_name, 'w') as json_file:
         json.dump(input_data, json_file, indent=4)
+    # this will tell us where we saved the input file
+    return file_name
 
 test_csv = "C:/Users/adele/Downloads/Low head Dam Info - Copy for python(Slopes).csv"
 output_fold = "C:/Users/adele/Downloads"
