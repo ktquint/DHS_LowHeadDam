@@ -1,10 +1,11 @@
-import pandas as pd
-import geopandas as gpd
 import os
 import requests
+import pandas as pd
+import geopandas as gpd
+
 
 # Source of data (initial excel file) - Remove later when df_slopes is available; use this for practice runs
-file_path = "Low head Dam Info - Copy for python.xlsx"
+file_path = "../Low head Dam Info - Copy for python.xlsx"
 df_slopes = pd.read_excel(file_path, usecols=['latitude', 'longitude', 'ID', 'LINKNO', 'gpkg'])
 
 # Downloads the gpkg file later in the code

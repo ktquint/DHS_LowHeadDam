@@ -2,9 +2,7 @@ import re
 import ast
 import pandas as pd
 import dbfread as dbf
-import create_json as cj
-import download_dem as dd
-import download_gpkgs as ds # ds for download stream
+from rathcelon_prep import create_json as cj, download_dem as dd, download_gpkgs as ds
 
 
 def get_attribute_df(curve_dbf):
