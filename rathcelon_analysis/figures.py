@@ -154,4 +154,3 @@ for rath_run in rath_runs:
     # plot rating curves and cross-sections
     plot_rating_curve(attr_tbl, rath_run)
     plot_cross_sections(attr_tbl, cross_section, rath_run, False)
-
