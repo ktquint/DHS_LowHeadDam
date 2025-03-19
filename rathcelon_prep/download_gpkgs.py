@@ -2,10 +2,11 @@ import os
 import requests
 import pandas as pd
 import pathlib
+import sys
 
 
 # Source of data (initial excel file) - Remove later when df_slopes is available; use this for practice runs
-file_path = "Low head Dam Info - Copy for python.xlsx"      # Excel with values
+file_path = "../Low head Dam Info - Copy for python.xlsx"      # Excel with values
 df_slopes = pd.read_excel(file_path, usecols=['latitude', 'longitude', 'ID', 'LINKNO', 'gpkg'])     # Dataframe of values
 
 # Downloads the gpkg file later in the code
@@ -20,7 +21,7 @@ def gpkg_download(df_slopes):
     os.makedirs(download_dir, exist_ok=True)        # Makes the directory to store the gpkg files; if already exists, won't do anything
 
     #List of linknos for each gpkg created beforehand
-    linknos = pd.read_csv('list_of_linkno.csv')
+    linknos = pd.read_csv('../list_of_linkno.csv')
 
     # Ensure the 'gpkg' column is of type object
     df_slopes['gpkg'] = df_slopes['gpkg'].astype(object)
