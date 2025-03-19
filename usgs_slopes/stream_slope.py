@@ -22,8 +22,6 @@ def search_and_download_gdb(lhd_df, output_folder):
     - find the geo-database that contains the hydrography around a streamgage
     **right now the USGS api returns all the surrounding ones... so for now I'll grab everything
     """
-    # Make the CSV file into a data frame
-    lhd_df = pd.read_csv(lhd_df)
     # Make a set of unique geodatabases
     gdbs_unique = set()
 
