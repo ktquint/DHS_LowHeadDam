@@ -9,9 +9,9 @@ data = {
         []
 }
 
-def rathclon_input (lhd_csv, outputlocation):
-    lhd_df = pd.read_csv(lhd_csv)
-    dams: list[dict[str | Any, str | bool | Any]] = []
+def rathclon_input (lhd_csv, outputlocation): #created function, rathclon_input is function name, () = function peramiters
+    lhd_df = pd.read_csv(lhd_csv) #creates a dataframe out of CSV
+    dams: list[dict[str | Any, str | bool | Any]] = [] #says which data types go into "dams" list
     for index, row in lhd_df.iterrows():
         name = str(row["ID"])
         dam_csv = lhd_csv
