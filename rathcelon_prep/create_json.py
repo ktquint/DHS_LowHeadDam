@@ -1,15 +1,9 @@
 import json
+import pandas as pd
 from typing import Any
 
-import pandas as pd
 
-# Data to be written to the JSON file
-data = {
-    "dams" :
-        []
-}
-
-def rathclon_input (lhd_csv, outputlocation):
+def rathcelon_input (lhd_csv, output_loc):
     lhd_df = pd.read_csv(lhd_csv)
     dams: list[dict[str | Any, str | bool | Any]] = []
     for index, row in lhd_df.iterrows():
@@ -34,13 +28,15 @@ def rathclon_input (lhd_csv, outputlocation):
             "create_reach_average_curve_file" : False
             }
         dams.append(dam_dict)
-    data = {
+    input_data = {
         "dams" : dams
     }
-    file_name = "data.json"
+    file_name = output_loc + "/input.json"
     with open(file_name, 'w') as json_file:
-        json.dump(data, json_file, indent=4)
+        json.dump(input_data, json_file, indent=4)
+    # this will tell us where we saved the input file
+    return file_name
 
 test_csv = "C:/Users/adele/Downloads/Low head Dam Info - Copy for python(Slopes).csv"
 output_fold = "C:/Users/adele/Downloads"
-rathclon_input (test_csv, output_fold)
+rathcelon_input(test_csv, output_fold)
