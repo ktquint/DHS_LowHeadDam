@@ -17,17 +17,22 @@ def sanitize_filename(filename):
         filename = filename.replace(char, "_")  # Replace invalid characters with '_'
     return filename
 
-
-def search_and_download_gdb(df, output_folder):
+def search_and_download_gdb(lhd_df, output_folder):
     """
     - find the geo-database that contains the hydrography around a streamgage
     **right now the USGS api returns all the surrounding ones... so for now I'll grab everything
     """
+    # Make the CSV file into a data frame
+    lhd_df = pd.read_csv(lhd_df)
     # Make a set of unique geodatabases
     gdbs_unique = set()
-    for row in df.itertuples():
-        lat = row.latitude
-        lon = row.longitude
+
+    # Add a column to the lhd data frame to store the sanitized titles
+    lhd_df['Sanitized Titles'] = None
+
+    for index, row in lhd_df.iterrows():
+        lat = row['latitude']
+        lon = row['longitude']
         bbox = (lon - 0.0003, lat - 0.0003, lon + 0.0003, lat + 0.0003)
 
         product = "National Hydrography Dataset Plus High Resolution (NHDPlus HR)"
@@ -61,13 +66,20 @@ def search_and_download_gdb(df, output_folder):
                     # update the unique set of geodatabases
                     gdbs_unique.update(gdb_list)
 
+            # Get the names of the gdb_list and sanitize them
+            sanitized_titles = [sanitize_filename(item.get("title", "Unnamed")) for item in gdb_list]
+            # Add the sanitized titles to the DataFrame
+            lhd_df.at[index, 'Sanitized Titles'] = str(sanitized_titles)
+
+
             # make the output folder if it doesn't already exist
             os.makedirs(output_folder, exist_ok=True)
 
             for item in gdbs_unique:
+                download_url = item.get("downloadURL")
+                #Get the names of the gdb_list
                 title = item.get("title", "Unnamed")
                 sanitized_title = sanitize_filename(title)  # sanitize the file name
-                download_url = item.get("downloadURL")
 
                 if download_url:
                     local_zip = os.path.join(output_folder, f"{sanitized_title}.zip")
@@ -93,19 +105,19 @@ def search_and_download_gdb(df, output_folder):
             print(e)
 
 
-def merge_tables(df, buffer_distance=1/3600):
+def merge_tables(lhd_df, buffer_distance=1/3600):
     """
     - make buffer around lat/lon
     - look through all the gdbs and find the one that contains the right stream
     - load the vaa table and merge attributes
     - return the slope value
     """
-    # df is dataframe, is input from earlier code
+    # lhd_df is dataframe, is input from earlier code
     # Initialize a list to store the max slope values
     max_slope_values = []
     # create a point using gage latitude and longitude
 
-    for index, row in df.iterrows():
+    for index, row in lhd_df.iterrows():
         # get lat, lon from dataframe
         lat = row['latitude']
         lon = row['longitude']
@@ -167,8 +179,8 @@ def merge_tables(df, buffer_distance=1/3600):
         else:
             max_slope_values.append(None)
     # Add the max slope values to the DataFrame
-    df['Slope'] = max_slope_values
-    df.to_excel('output.xlsx', index=False)
+    lhd_df['Slope'] = max_slope_values
+    lhd_df.to_excel('output.xlsx', index=False)
     return # a dataframe with a slope column
 
 
@@ -205,17 +217,17 @@ def extract_lat_lon_and_station_id(input_string):
     return coords[0], coords[1], str(station)
 
 
-def slope_from_lat_lon (streamdata):
+def slope_from_lat_lon (lhd_xlsx):
 
     # Read the Excel file into a DataFrame
-    df = pd.read_excel(streamdata)
+    lhd_df = pd.read_excel(lhd_xlsx)
 
     # Select specific columns
-    df_clean = df[['ID', 'latitude', 'longitude', 'Width (ft)']]
-    df_gdbs = search_and_download_gdb(df_clean, './gdbs')
-    df_slopes = merge_tables(df_gdbs, './gdbs')
-    output_excel = streamdata[:-4] + '_slopes.xlsx'
-    df_slopes.to_excel(output_excel, index=False)
+    lhd_df_clean = lhd_df[['ID', 'latitude', 'longitude', 'Width (ft)']]
+    os.makedirs('./gdbs', exist_ok=True)
+    lhd_df_gdbs = search_and_download_gdb(lhd_df_clean, './gdbs')
+    lhd_df_slopes = merge_tables(lhd_df_gdbs)
+    lhd_df_slopes.to_excel(lhd_xlsx, index=False)
     # Display the selected columns: print(selected_columns)
 
 ''' def slope_lat_long (streamdata.xlsx)
@@ -226,68 +238,19 @@ def slope_from_lat_lon (streamdata):
             return df 3.0
         save df to csu or excel'''
 
-# start of Eliana's code
-
-# Source of data (initial excel file) - Remove later when df_slopes is available; use this for practice runs
-file_path = "Low head Dam Info - Copy for python.xlsx"
-df_slopes = pd.read_excel(file_path, usecols=['latitude', 'longitude', 'ID', 'LINKNO', 'gpkg'])
-
-# Downloads the gpkg file later in the code
-def download_gpkg(url, local_path):
-    response = requests.get(url)
-    with open(local_path, 'wb') as f:
-        f.write(response.content)
-
-def gpkg_download(df_slopes):
-    # Place where gpkgs are downloaded
-    download_dir = 'all_downloaded_gpkgs'
-    os.makedirs(download_dir, exist_ok=True)
-
-    #List of linknos, will just put the list into lhd
-    linknos = pd.read_csv('list_of_linkno.csv')
-
-    # Ensure the 'gpkg' column is of type object
-    df_slopes['gpkg'] = df_slopes['gpkg'].astype(object)
-
-    # looks through rows of the initial dataframe
-    for row in df_slopes.itertuples():
-        linkno = row.LINKNO # gets linkno value of the row
-
-        if isinstance(linkno, int): # Checks if linkno is int
-            found = False
-            for column in linknos.columns: # checks thru all columns of linkno values csv
-                local_gpkg_path = os.path.join(download_dir, f"{column}.gpkg") # path to store gpkg
-                gpkg_url = f"http://geoglows-v2.s3-us-west-2.amazonaws.com/streams/{column}.gpkg" # where gpkg is downloaded from
-                if linkno in linknos[column].values: # if linkno is in the column of the gpkg
-                    if not os.path.exists(local_gpkg_path): # if wasn't already downloaded
-                        download_gpkg(gpkg_url, local_gpkg_path) # downloads
-                        df_slopes.at[row.Index, 'gpkg'] = f"{column}.gpkg" # adds gpkg name to the excel file
-                        found = True
-                        break
-                    elif os.path.exists(local_gpkg_path): # if linkno is already downloaded
-                        df_slopes.at[row.Index, 'gpkg'] = f"{column}.gpkg" # just adds gpkg name, no download
-                        found = True
-                        break
-            if not found:
-                df_slopes.at[row.Index, 'gpkg'] = "" # adds nothing if not found
-
-    df_slopes.to_excel('output_w_gpkgs.xlsx', index=False) # converts to excel file
-
-gpkg_download(df_slopes) #Works when I tested it, please check files
-# End of Eliana's code
 
 """
 Old Test Case:
 """
-# gage_info = str(input("Enter gage info: "))
-#
-# latitude, longitude, station_id = extract_lat_lon_and_station_id(gage_info)
-# output_folder = './' + station_id
-#
-# print(f'Station ID: {station_id}')
-# print(f'Latitude: {latitude}')
-# print(f'Longitude: {longitude}')
-#
-# stream_slope = slope_from_lat_lon(latitude, longitude, output_folder)
-# print(f'The stream slope at USGS Station {station_id} is {stream_slope}')
+gage_info = str(input("Enter gage info: "))
+
+latitude, longitude, station_id = extract_lat_lon_and_station_id(gage_info)
+output_folder = './' + station_id
+
+print(f'Station ID: {station_id}')
+print(f'Latitude: {latitude}')
+print(f'Longitude: {longitude}')
+
+stream_slope = slope_from_lat_lon(lhd_database_xlsx)
+print(f'The stream slope at USGS Station {station_id} is {stream_slope}')
 
