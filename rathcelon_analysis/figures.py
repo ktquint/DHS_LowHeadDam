@@ -40,8 +40,8 @@ def get_xs_df(xs_txt):
     """
     xs_df = pd.read_csv(xs_txt, header=None, sep='\t')
     xs_df = xs_df.rename(columns={0: 'cell_comid', 1: 'row', 2: 'column',
-                                  3: 'xs_profile1', 4: 'd_wse', 5: 'd_distance_z1', 6: "manning's_n1",
-                                  7: 'xs_profile2', 8: 'd_wse', 9: 'd_distance_z2', 10: "manning's_n2"})
+                                  3: 'xs_profile1', 4: 'd_wse1', 5: 'd_distance_z1', 6: "manning's_n1",
+                                  7: 'xs_profile2', 8: 'd_wse2', 9: 'd_distance_z2', 10: "manning's_n2"})
     xs_df['xs_profile1'] = xs_df['xs_profile1'].apply(ast.literal_eval)
     xs_df['xs_profile2'] = xs_df['xs_profile2'].apply(ast.literal_eval)
     xs_df["manning's_n1"] = xs_df["manning's_n1"].apply(ast.literal_eval)
@@ -56,6 +56,8 @@ def get_within_banks(xs_df):
     # this is the manning's for flow within banks
     mannings_n = 0.03
     for i in range(len(xs_df)):
+        #find values less than the list number corresponding to water surface elevation
+        #get water surface elevation from local vdt database
         index_bank1 = len(xs_df.loc[i, "manning's_n1"]) - 1 - xs_df.loc[i, "manning's_n1"][::-1].index(mannings_n)
         xs_df.loc[i, 'xs_profile1'] = xs_df.loc[i, 'xs_profile1'][:index_bank1]
         xs_df.loc[i, "manning's_n1"] = xs_df.loc[i, "manning's_n1"][:index_bank1]
@@ -75,8 +77,11 @@ def plot_cross_sections(attribute_df, xs_df, output_dir, in_banks):
 
     xs_profile = pd.DataFrame()
     for i in range(len(attribute_df)):
-        result = xs_df[(xs_df['row'] == attribute_df['row'][i]) & (xs_df['column'] == attribute_df['col'][i])]
-        xs_profile = pd.concat([xs_profile, result])
+        xs_i = xs_df[(xs_df['row'] == attribute_df['row'][i]) & (xs_df['column'] == attribute_df['col'][i])]
+        """
+        add columns from xs_df to attribute_df instead of making a new one
+        """
+        xs_profile = pd.concat([xs_profile, xs_i])
 
     for i in range(len(xs_profile)):
         # this is the cross-section elevations
