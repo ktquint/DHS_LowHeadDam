@@ -14,7 +14,7 @@ def download_gpkg(url, local_path):
     with open(local_path, 'wb') as f:
         f.write(response.content)
 
-def gpkg_download(df_slopes):
+def gpkg_download(df_slopes, download_path):
     gpkg_list = []                                  # List to store gpkg values (paths)
     download_dir = 'all_downloaded_gpkgs'           # Place where gpkgs are downloaded
     os.makedirs(download_dir, exist_ok=True)        # Makes the directory to store the gpkg files; if already exists, won't do anything

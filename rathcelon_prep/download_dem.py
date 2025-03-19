@@ -9,6 +9,7 @@ def sanitize_filename(filename):
     return filename
 
 def search_and_download_dems(lat_long, output_folder):
+    # example path: "C:/kenny/DEM/Specific DEM/Specific.tif
     lat = lat_long[0]
     long = lat_long[1]
     # bounding box eventually 5 channel widths downstream
@@ -27,7 +28,7 @@ def search_and_download_dems(lat_long, output_folder):
         params = {
             "bbox": f"{bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]}",
             "datasets": product,
-            "max": 10,  # Number of results to return
+            "max": 1,  # Number of results to return
             "outputFormat": "JSON"
         }
 
