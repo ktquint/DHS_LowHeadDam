@@ -73,8 +73,13 @@ def search_and_download_gdb(lhd_df, output_folder):
             # make the output folder if it doesn't already exist
             os.makedirs(output_folder, exist_ok=True)
 
-            for gdb_dict in gdbs_unique:
-                download_url = gdb_dict.get("downloadURL")
+            for item in gdb_list:
+                unique_downloadurl = dict(item).get("downloadURL")
+                if unique_downloadurl not in gdbs_unique:
+                    download_url = unique_downloadurl
+                    gdbs_unique.add(download_url)
+                else:
+                    continue
                 #Get the names of the gdb_list
                 title = gdb_dict.get("title", "Unnamed")
                 sanitized_title = sanitize_filename(title)  # sanitize the file name
