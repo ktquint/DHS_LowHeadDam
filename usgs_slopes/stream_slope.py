@@ -82,7 +82,7 @@ def search_and_download_gdb(lhd_df, output_folder):
                     continue
 
                 #Get the names of the gdb_list
-                title = gdb_dict.get("title", "Unnamed")
+                title = dict(item).get("title", "Unnamed")
                 sanitized_title = sanitize_filename(title)  # sanitize the file name
 
                 if download_url:
