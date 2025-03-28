@@ -17,17 +17,20 @@ def sanitize_filename(filename):
         filename = filename.replace(char, "_")  # Replace invalid characters with '_'
     return filename
 
-
-def search_and_download_gdb(df, output_folder):
+def search_and_download_gdb(lhd_df, output_folder):
     """
     - find the geo-database that contains the hydrography around a streamgage
     **right now the USGS api returns all the surrounding ones... so for now I'll grab everything
     """
     # Make a set of unique geodatabases
     gdbs_unique = set()
-    for row in df.itertuples():
-        lat = row.latitude
-        lon = row.longitude
+
+    # Add a column to the lhd data frame to store the sanitized titles
+    lhd_df['Sanitized Titles'] = None
+
+    for index, row in lhd_df.iterrows():
+        lat = row['latitude']
+        lon = row['longitude']
         bbox = (lon - 0.0003, lat - 0.0003, lon + 0.0003, lat + 0.0003)
 
         product = "National Hydrography Dataset Plus High Resolution (NHDPlus HR)"
@@ -61,13 +64,26 @@ def search_and_download_gdb(df, output_folder):
                     # update the unique set of geodatabases
                     gdbs_unique.update(gdb_list)
 
+            # Get the names of the gdb_list and sanitize them
+            sanitized_titles = [sanitize_filename(item.get("title", "Unnamed")) for item in gdb_list]
+            # Add the sanitized titles to the DataFrame
+            lhd_df.at[index, 'Sanitized Titles'] = str(sanitized_titles)
+
+
             # make the output folder if it doesn't already exist
             os.makedirs(output_folder, exist_ok=True)
 
-            for item in gdbs_unique:
-                title = item.get("title", "Unnamed")
+            for item in gdb_list:
+                unique_downloadurl = dict(item).get("downloadURL")
+                if unique_downloadurl not in gdbs_unique:
+                    download_url = unique_downloadurl
+                    gdbs_unique.add(download_url)
+                else:
+                    continue
+
+                #Get the names of the gdb_list
+                title = dict(item).get("title", "Unnamed")
                 sanitized_title = sanitize_filename(title)  # sanitize the file name
-                download_url = item.get("downloadURL")
 
                 if download_url:
                     local_zip = os.path.join(output_folder, f"{sanitized_title}.zip")
@@ -93,19 +109,19 @@ def search_and_download_gdb(df, output_folder):
             print(e)
 
 
-def merge_tables(df, buffer_distance=1/3600):
+def merge_tables(lhd_df, buffer_distance=1/3600):
     """
     - make buffer around lat/lon
     - look through all the gdbs and find the one that contains the right stream
     - load the vaa table and merge attributes
     - return the slope value
     """
-    # df is dataframe, is input from earlier code
+    # lhd_df is dataframe, is input from earlier code
     # Initialize a list to store the max slope values
     max_slope_values = []
     # create a point using gage latitude and longitude
 
-    for index, row in df.iterrows():
+    for index, row in lhd_df.iterrows():
         # get lat, lon from dataframe
         lat = row['latitude']
         lon = row['longitude']
@@ -167,8 +183,8 @@ def merge_tables(df, buffer_distance=1/3600):
         else:
             max_slope_values.append(None)
     # Add the max slope values to the DataFrame
-    df['Slope'] = max_slope_values
-    df.to_excel('output.xlsx', index=False)
+    lhd_df['Slope'] = max_slope_values
+    lhd_df.to_excel('output.xlsx', index=False)
     return # a dataframe with a slope column
 
 
@@ -205,17 +221,17 @@ def extract_lat_lon_and_station_id(input_string):
     return coords[0], coords[1], str(station)
 
 
-def slope_from_lat_lon (streamdata):
+def slope_from_lat_lon (lhd_xlsx):
 
     # Read the Excel file into a DataFrame
-    df = pd.read_excel(streamdata)
+    lhd_df = pd.read_excel(lhd_xlsx)
 
     # Select specific columns
-    df_clean = df[['ID', 'latitude', 'longitude', 'Width (ft)']]
-    df_gdbs = search_and_download_gdb(df_clean, './gdbs')
-    df_slopes = merge_tables(df_gdbs, './gdbs')
-    output_excel = streamdata[:-4] + '_slopes.xlsx'
-    df_slopes.to_excel(output_excel, index=False)
+    lhd_df_clean = lhd_df[['ID', 'latitude', 'longitude', 'Width (ft)']]
+    os.makedirs('./gdbs', exist_ok=True)
+    lhd_df_gdbs = search_and_download_gdb(lhd_df_clean, './gdbs')
+    lhd_df_slopes = merge_tables(lhd_df_gdbs)
+    lhd_df_slopes.to_excel(lhd_xlsx, index=False)
     # Display the selected columns: print(selected_columns)
 
 ''' def slope_lat_long (streamdata.xlsx)
@@ -226,18 +242,19 @@ def slope_from_lat_lon (streamdata):
             return df 3.0
         save df to csu or excel'''
 
+
 """
 Old Test Case:
 """
-# gage_info = str(input("Enter gage info: "))
-#
-# latitude, longitude, station_id = extract_lat_lon_and_station_id(gage_info)
-# output_folder = './' + station_id
-#
-# print(f'Station ID: {station_id}')
-# print(f'Latitude: {latitude}')
-# print(f'Longitude: {longitude}')
-#
-# stream_slope = slope_from_lat_lon(latitude, longitude, output_folder)
-# print(f'The stream slope at USGS Station {station_id} is {stream_slope}')
+gage_info = str(input("Enter gage info: "))
+
+latitude, longitude, station_id = extract_lat_lon_and_station_id(gage_info)
+output_folder = './' + station_id
+
+print(f'Station ID: {station_id}')
+print(f'Latitude: {latitude}')
+print(f'Longitude: {longitude}')
+
+stream_slope = slope_from_lat_lon(lhd_database_xlsx)
+print(f'The stream slope at USGS Station {station_id} is {stream_slope}')
 
