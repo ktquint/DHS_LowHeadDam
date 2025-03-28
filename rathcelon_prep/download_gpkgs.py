@@ -7,6 +7,7 @@ import pathlib
 # Source of data (initial excel file) - Remove later when df_slopes is available; use this for practice runs
 file_path = "../Low head Dam Info - Copy for python.xlsx"                                           # Excel with values
 df_slopes = pd.read_excel(file_path, usecols=['latitude', 'longitude', 'ID', 'LINKNO', 'gpkg'])     # Dataframe of values
+download_path = 1
 
 # Downloads the gpkg file later in the code
 def download_gpkg(url, local_path):
@@ -59,6 +60,5 @@ def gpkg_download(df_slopes, download_path):
         elif isinstance(linkno, str):
             gpkg_list.append("")                                        # adds empty space if says something like "No River ID" or non-number
     df_slopes['gpkg'] = pd.Series(gpkg_list)                            # adds the values of the list to the column of dataframe (faster processing)
-    df_slopes.to_excel('output_w_gpkg_paths.xlsx', index=False)         # converts to excel file
 
-gpkg_download(df_slopes) # runs function
+gpkg_download(df_slopes, download_path) # runs function
