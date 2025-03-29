@@ -3,7 +3,6 @@ import requests
 import pandas as pd
 import pathlib
 
-
 # Source of data (initial excel file) - Remove later when df_slopes is available; use this for practice runs
 file_path = "../Low head Dam Info - Copy for python.xlsx"                                           # Excel with values
 df_slopes = pd.read_excel(file_path, usecols=['latitude', 'longitude', 'ID', 'LINKNO', 'gpkg'])     # Dataframe of values
