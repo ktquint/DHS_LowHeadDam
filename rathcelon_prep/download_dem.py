@@ -21,7 +21,7 @@ def search_and_download_dems(df_slopes, output_folder):
         long = row.longitude  # gets longitude value of row
 
         # bounding box eventually 5 channel widths downstream
-        bbox = (lat - 0.005, long - 0.005, lat + 0.005, long + 0.005)
+        bbox = (long - 0.005, lat - 0.005, long + 0.005, lat + 0.005)
 
         products = [
             # "Digital Elevation Model (DEM) 1 meter",
