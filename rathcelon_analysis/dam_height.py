@@ -7,7 +7,7 @@ def weir_height(Q, b, y_u, tol=0.001):
     b = bank width (m)
     y_u = upstream depth (m)
     """
-    q = Q/b # unit flow
+    q = Q / b # unit flow
     g = 9.81 # gravitational constant
     # left-hand side
     A = 3 * q / (2 * np.sqrt(2 * g))
@@ -29,7 +29,7 @@ def weir_height(Q, b, y_u, tol=0.001):
     return round(p, 3)
 
 
-dam_info = pd.read_csv("C:/Users/ki87ujmn/Downloads/height_test.csv")
+dam_info = pd.read_csv("C:/Users/ki87ujmn/OneDrive - Brigham Young University/MS BYU/Dam Data/height_test.csv")
 dam_info['p'] = 0
 for index, row in dam_info.iterrows():
     dam_info.at[index, 'p'] = weir_height(row['Q'], row['b'], row['y_u'])
