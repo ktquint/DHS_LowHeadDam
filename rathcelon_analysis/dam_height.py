@@ -1,32 +1,36 @@
 import numpy as np
-"""
-hopefully we can get dam height from rating curves?
+import pandas as pd
 
-basically, the goal is to estimate dam height, P, from the RathCelon rating curves
-"""
-g = 32.2 #ft/s**2
+def weir_height(Q, b, y_u, tol=0.001):
+    """
+    Q = flow in river (cms)
+    b = bank width (m)
+    y_u = upstream depth (m)
+    """
+    q = Q/b # unit flow
+    g = 9.81 # gravitational constant
+    # left-hand side
+    A = 3 * q / (2 * np.sqrt(2 * g))
+    # initial weir height estimate
+    p = 0.5 * y_u # we want to start with a positive number < y_u
+    # right-hand side
+    B = 0.611 * (y_u - p)**(3/2) + 0.075 * ((y_u - p)**(5/2))/p
+    counter = 0 # to avoid infinite loop
+    while abs(A - B) > tol:
+        counter += 1
+        if A < B:
+            p += 0.001
+        else:
+            p -= 0.001
+        # recalculate B after adjusting height
+        B = 0.611 * (y_u - p) ** (3 / 2) + 0.075 * ((y_u - p) ** (5 / 2)) / p
+        if counter > 10000:
+            break
+    return round(p, 3)
 
-# equation 4
-# C_W = 0.611 + 0.75 * H/P
-# equation 3
-# q = 2/3 * C_W * np.sqrt(2 * g) * H^(3/2)
 
-# equation 6
-# C_L = 0.1 * P/H
-# DE_p = (P + H) - (Y_1 + q**2/(Y_1**2 * 2 * g))
-
-"""
-after reading leutheusser and fan (2001), here's what I'm thinking:
-
-H + P is the total head upstream... let's call it Y_u
-
-upstream:
-    Q = b * 2/3 * (0.611 + 0.75 * H/P) * np.sqrt(2 * g) * H^(3/2)
-    
-    we know Q, b, & g
-    
-    
-downstream:
-    
-
-"""
+dam_info = pd.read_csv("C:/Users/ki87ujmn/Downloads/height_test.csv")
+dam_info['p'] = 0
+for index, row in dam_info.iterrows():
+    dam_info.at[index, 'p'] = weir_height(row['Q'], row['b'], row['y_u'])
+print(dam_info)
