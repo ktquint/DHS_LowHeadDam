@@ -7,6 +7,7 @@ import zipfile
 import requests
 import pandas as pd
 import geopandas as gpd
+from requests.structures import CaseInsensitiveDict
 from shapely.geometry import Point
 
 
@@ -31,6 +32,9 @@ def search_and_download_gdb(lhd_df, output_folder):
     for index, row in lhd_df.iterrows():
         lat = row['latitude']
         lon = row['longitude']
+        # Skip rows with missing latitude or longitude
+        if pd.isna(lat) or pd.isna(lon):
+            continue
         bbox = (lon - 0.0003, lat - 0.0003, lon + 0.0003, lat + 0.0003)
 
         product = "National Hydrography Dataset Plus High Resolution (NHDPlus HR)"
@@ -52,7 +56,7 @@ def search_and_download_gdb(lhd_df, output_folder):
             results = response.json().get("items", [])
             if not results:
                 print(f"No results found for {product} data.")
-                return
+                continue
 
             # clean out list of geodatabases
             gdb_list = []
@@ -61,8 +65,7 @@ def search_and_download_gdb(lhd_df, output_folder):
                 if item['format'] == 'FileGDB, NHDPlus HR Rasters':
                     # save a list of geodatabases associated with this dam's lat-lon
                     gdb_list.append(item)
-                    # update the unique set of geodatabases
-                    gdbs_unique.update(gdb_list)
+
 
             # Get the names of the gdb_list and sanitize them
             sanitized_titles = [sanitize_filename(item.get("title", "Unnamed")) for item in gdb_list]
@@ -246,7 +249,7 @@ def slope_from_lat_lon (lhd_xlsx):
 """
 Old Test Case:
 """
-gage_info = str(input("Enter gage info: "))
+'''gage_info = str(input("Enter gage info: "))
 
 latitude, longitude, station_id = extract_lat_lon_and_station_id(gage_info)
 output_folder = './' + station_id
@@ -256,5 +259,13 @@ print(f'Latitude: {latitude}')
 print(f'Longitude: {longitude}')
 
 stream_slope = slope_from_lat_lon(lhd_database_xlsx)
-print(f'The stream slope at USGS Station {station_id} is {stream_slope}')
+print(f'The stream slope at USGS Station {station_id} is {stream_slope}')'''
 
+''''###
+Test Case
+###'''
+lhd_csv = "C:/Users/pgordi/Downloads/LHD stream-slope test cases/LHD database test case 2.1 - duplicate downloads.csv"
+lhd_df = pd.read_csv(lhd_csv)
+output_folder = "C:/Users/pgordi/Downloads/LHD downloads"
+search_and_download_gdb(lhd_df, output_folder)
+lhd_df.to_csv("C:/Users/pgordi/Downloads/LHD stream-slope test cases/LHD database test case 2.1 - duplicate downloads.csv", index=False)
