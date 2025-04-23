@@ -42,6 +42,7 @@ def get_xs_df(xs_txt):
     xs_df = xs_df.rename(columns={0: 'cell_comid', 1: 'row', 2: 'column',
                                   3: 'xs_profile1', 4: 'd_wse1', 5: 'd_distance_z1', 6: "manning's_n1",
                                   7: 'xs_profile2', 8: 'd_wse2', 9: 'd_distance_z2', 10: "manning's_n2"})
+
     xs_df['xs_profile1'] = xs_df['xs_profile1'].apply(ast.literal_eval)
     xs_df['xs_profile2'] = xs_df['xs_profile2'].apply(ast.literal_eval)
     xs_df["manning's_n1"] = xs_df["manning's_n1"].apply(ast.literal_eval)
@@ -49,22 +50,29 @@ def get_xs_df(xs_txt):
     return xs_df
 
 
-def get_within_banks(xs_df):
-    """
-    this doesn't work yet... lol
-    """
-    # this is the manning's for flow within banks
-    mannings_n = 0.03
-    for i in range(len(xs_df)):
-        #find values less than the list number corresponding to water surface elevation
-        #get water surface elevation from local vdt database
-        index_bank1 = len(xs_df.loc[i, "manning's_n1"]) - 1 - xs_df.loc[i, "manning's_n1"][::-1].index(mannings_n)
-        xs_df.loc[i, 'xs_profile1'] = xs_df.loc[i, 'xs_profile1'][:index_bank1]
-        xs_df.loc[i, "manning's_n1"] = xs_df.loc[i, "manning's_n1"][:index_bank1]
-        index_bank2 = len(xs_df.loc[i, "manning's_n2"]) - 1 - xs_df.loc[i, "manning's_n2"][::-1].index(mannings_n)
-        xs_df.loc[i, 'xs_profile2'] = xs_df.loc[i, 'xs_profile2'][:index_bank2]
-        xs_df.loc[i, "manning's_n2"] = xs_df.loc[i, "manning's_n2"][:index_bank2]
-    return xs_df
+def get_within_banks(xs_df, attribute_df):
+    xs_profile = pd.DataFrame()
+    for i in range(len(attribute_df)):
+        xs_i = xs_df[(xs_df['row'] == attribute_df['row'][i]) & (xs_df['column'] == attribute_df['col'][i])]
+        """
+        add columns from xs_df to attribute_df instead of making a new one
+        """
+        xs_profile = pd.concat([xs_profile, xs_i])
+    print(xs_profile['d_wse1'])
+    for index, row in xs_profile.iterrows():
+        wse_1 = row['d_wse1']
+        wse_2 = row['d_wse2']
+
+        xs_1 = row['xs_profile1']
+        xs_2 = row['xs_profile2']
+        closest_wse_1 = min(xs_1, key=lambda x: abs(x - wse_1))
+        bank_1 = xs_1.index(closest_wse_1)
+        closest_wse_2 = min(xs_2, key=lambda x: abs(x - wse_2))
+        bank_2 = len(xs_2) -1 - xs_2[::-1].index(closest_wse_2)
+
+        xs_profile['xs_profile1'][index] = row['xs_profile1'][:bank_1 + 2]
+        xs_profile ['xs_profile2'][index] = row['xs_profile2'][:bank_2 + 2]
+    return xs_profile
 
 """
 these functions plot create plots from the data frames
@@ -73,7 +81,7 @@ these functions plot create plots from the data frames
 def plot_cross_sections(attribute_df, xs_df, output_dir, in_banks):
     # if we're only plotting in banks we need to trim down the xs data frame
     if in_banks:
-        xs_df = get_within_banks(xs_df)
+        xs_df = get_within_banks(xs_df, attribute_df)
 
     xs_profile = pd.DataFrame()
     for i in range(len(attribute_df)):
@@ -96,8 +104,17 @@ def plot_cross_sections(attribute_df, xs_df, output_dir, in_banks):
         x2 = [max(x1) + j * xs_profile['d_distance_z2'].iloc[i] for j in range(len(y2))]
         x = x1 + x2
 
+        intersect_x1 = x1[np.isclose(y1, xs_profile["d_wse1"].iloc[i], atol=1)]  # Find x values where
+        intersect_x2 = x2[np.isclose(y2, xs_profile["d_wse2"].iloc[i], atol=1)]
+
+        print(xs_profile['d_wse1'].iloc[i])
+
         # create the plot
-        plt.plot(x, y)
+        plt.plot(x, y, color = "black")
+        plt.plot(intersect_x1,xs_profile["d_wse1"].iloc[i],color = "blue")
+        plt.plot(intersect_x2, xs_profile["d_wse2"].iloc[i], color="blue")
+
+        #plt.axhline(y=xs_profile["d_wse1"].iloc[i], color='blue', linestyle='--', label='water surface elevation' )
 
         # add labels and title
         plt.xlabel('Lateral Distance (m)')
@@ -140,22 +157,29 @@ def plot_rating_curve(attribute_df, output_dir):
 """
 this is the real deal... at least a real test case
 """
+lhd_id = "28"
+result_dbf ="C:/Users/adele/OneDrive/Desktop/BYU/Dam Research/kenny stuff/results_example/28/VDT/28_Local_CurveFile.dbf"
+result_txt = "C:/Users/adele/OneDrive/Desktop/BYU/Dam Research/kenny stuff/results_example/28/XS/28_XS_Out.txt"
+attr_tbl = get_attribute_df(result_dbf)
+cross_section = get_xs_df(result_txt)
+plot_rating_curve(attr_tbl, "C:/Users/adele/OneDrive/Desktop/BYU/Dam Research/kenny stuff/results_example/28")
+plot_cross_sections(attr_tbl, cross_section, "C:/Users/adele/OneDrive/Desktop/BYU/Dam Research/kenny stuff/results_example/28", True)
+#
+# # this folder has the results from some example runs
+# all_results = "C:/Users/ki87ujmn/Downloads/rathcelon-example/results"
+# # these are the subdirectories for each rathcelon run
+# rath_runs = [os.path.join(all_results, d) for d in os.listdir(all_results) if os.path.isdir(os.path.join(all_results, d))]
 
-# this folder has the results from some example runs
-all_results = "C:/Users/ki87ujmn/Downloads/rathcelon-example/results"
-# these are the subdirectories for each rathcelon run
-rath_runs = [os.path.join(all_results, d) for d in os.listdir(all_results) if os.path.isdir(os.path.join(all_results, d))]
-
-for rath_run in rath_runs:
-    # the lhd_id is the name of each directory
-    lhd_id = rath_run.split('\\')[-1]
-    # the dbf and txt will be in the same place for each file
-    result_dbf = rath_run + f'/VDT/{lhd_id}_Local_CurveFile.dbf'
-    result_txt = rath_run + f'/XS/{lhd_id}_XS_Out.txt'
-    # get the attribute table from the dbf
-    attr_tbl = get_attribute_df(result_dbf)
-    # get the cross-section data from the txt
-    cross_section = get_xs_df(result_txt)
-    # plot rating curves and cross-sections
-    plot_rating_curve(attr_tbl, rath_run)
-    plot_cross_sections(attr_tbl, cross_section, rath_run, False)
+# for rath_run in rath_runs:
+#     # the lhd_id is the name of each directory
+#     lhd_id = rath_run.split('//')[-1]
+#     # the dbf and txt will be in the same place for each file
+#     result_dbf = rath_run + f'/VDT/{lhd_id}_Local_CurveFile.dbf'
+#     result_txt = rath_run + f'/XS/{lhd_id}_XS_Out.txt'
+#     # get the attribute table from the dbf
+#     attr_tbl = get_attribute_df(result_dbf)
+#     # get the cross-section data from the txt
+#     cross_section = get_xs_df(result_txt)
+#     # plot rating curves and cross-sections
+#     plot_rating_curve(attr_tbl, rath_run)
+#     plot_cross_sections(attr_tbl, cross_section, rath_run, False)
