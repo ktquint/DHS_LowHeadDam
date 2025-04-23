@@ -35,6 +35,7 @@ def search_and_download_gdb(lhd_df, output_folder):
         # Skip rows with missing latitude or longitude
         if pd.isna(lat) or pd.isna(lon):
             continue
+
         bbox = (lon - 0.0003, lat - 0.0003, lon + 0.0003, lat + 0.0003)
 
         product = "National Hydrography Dataset Plus High Resolution (NHDPlus HR)"
