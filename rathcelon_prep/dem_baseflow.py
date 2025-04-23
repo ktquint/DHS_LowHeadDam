@@ -2,8 +2,27 @@ import requests
 
 # Define the base URL
 
-def get_dem_date(lhd_df):
-    return lhd_df
+def get_dem_dates(lat, lon):
+    """
+    use lat/lon to get lidar data used to make the dem
+    check the date the lidar was taken
+    """
+    bbox = (lon - 0.001, lat - 0.001, lon + 0.001, lat + 0.001)
+    dataset = 'Lidar Point Cloud'
+    base_url = "https://tnmaccess.nationalmap.gov/api/v1/products"
+
+    params = {"bbox": f"{bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]}",
+              "datasets": dataset,
+              "max": 1,
+              # "prodFormats": ["GeoTIFF"], # idk what to put here yet
+              "outputFormat": "JSON"}
+    response = requests.get(base_url, params=params)
+    lidar_info = response.json().get("items", [])
+    return lidar_info['Start Date'] # idk if this is how it's formatted
+
+get_dem_dates(36.12085558,-95.98829985)
+
+
 
 
 def get_dem_discharge(lhd_df):
