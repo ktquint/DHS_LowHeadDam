@@ -29,7 +29,7 @@ def download_dems(lhd_df, dem_dir):
         lon = row.longitude
         bbox = (lon - 0.001, lat - 0.001, lon + 0.001, lat + 0.001)
         # print(f"latitude = {lat}, longitude = {lon}")
-        datasets = ["Digital Elevation Model (DEM) 1 meter",
+        datasets = [# "Digital Elevation Model (DEM) 1 meter",
                     "National Elevation Dataset (NED) 1/9 arc-second",
                     "National Elevation Dataset (NED) 1/3 arc-second Current"]
         results = []
@@ -58,7 +58,7 @@ def download_dems(lhd_df, dem_dir):
         title = sanitize_filename(dem.get("title"))
         dem_subdir =   f"{dem_dir}/{title}"
         os.makedirs(dem_subdir, exist_ok=True) # if the directory already exists, it won't freak out
-        dem_path = f"{dem_subdir}/{title}.tiff"
+        dem_path = f"{dem_subdir}/{title}.tif"
         lhd_df.at[index, "dem_dir"] = dem_subdir # save the path to the specific dem folder to the DataFrame
 
         path_list.append(dem_path)
