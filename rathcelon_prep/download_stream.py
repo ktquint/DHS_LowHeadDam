@@ -36,15 +36,11 @@ def assign_flowlines(lhd_df, gpkg_dir):
         gpkg_set.add(gpkg_path)
 
     for gpkg_path in gpkg_set: # goes through the unique set of gpkgs and downloads them
+        """
+        esta no funciona :(
+        """
+
         gpkg_name = gpkg_path.split("/")[-1]
         gpkg_url = f"{base_url}/{gpkg_name}"
         download_gpkg(gpkg_url, gpkg_path)
     return lhd_df
-
-"""
-old test case
-"""
-# gpkg = "C:/Users/ki87ujmn/Downloads/LHD_RathCelon/streams"
-# lhd = pd.read_excel("C:/Users/ki87ujmn/Downloads/LHD_RathCelon/LowHead_Dam_Database.xlsx")
-# test_df = assign_gpkg(lhd, gpkg)
-# print(test_df)

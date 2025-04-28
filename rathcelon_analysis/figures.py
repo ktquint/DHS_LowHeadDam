@@ -104,15 +104,15 @@ def plot_cross_sections(attribute_df, xs_df, output_dir, in_banks):
         x2 = [max(x1) + j * xs_profile['d_distance_z2'].iloc[i] for j in range(len(y2))]
         x = x1 + x2
 
-        intersect_x1 = x1[np.isclose(y1, xs_profile["d_wse1"].iloc[i], atol=1)]  # Find x values where
-        intersect_x2 = x2[np.isclose(y2, xs_profile["d_wse2"].iloc[i], atol=1)]
+        # intersect_x1 = x1[np.isclose(y1, xs_profile["d_wse1"].iloc[i], atol=1)]  # Find x values where
+        # intersect_x2 = x2[np.isclose(y2, xs_profile["d_wse2"].iloc[i], atol=1)]
 
         print(xs_profile['d_wse1'].iloc[i])
 
         # create the plot
         plt.plot(x, y, color = "black")
-        plt.plot(intersect_x1,xs_profile["d_wse1"].iloc[i],color = "blue")
-        plt.plot(intersect_x2, xs_profile["d_wse2"].iloc[i], color="blue")
+        # plt.plot(intersect_x1,xs_profile["d_wse1"].iloc[i],color = "blue")
+        # plt.plot(intersect_x2, xs_profile["d_wse2"].iloc[i], color="blue")
 
         #plt.axhline(y=xs_profile["d_wse1"].iloc[i], color='blue', linestyle='--', label='water surface elevation' )
 
@@ -157,29 +157,31 @@ def plot_rating_curve(attribute_df, output_dir):
 """
 this is the real deal... at least a real test case
 """
-lhd_id = "28"
-result_dbf ="C:/Users/adele/OneDrive/Desktop/BYU/Dam Research/kenny stuff/results_example/28/VDT/28_Local_CurveFile.dbf"
-result_txt = "C:/Users/adele/OneDrive/Desktop/BYU/Dam Research/kenny stuff/results_example/28/XS/28_XS_Out.txt"
-attr_tbl = get_attribute_df(result_dbf)
-cross_section = get_xs_df(result_txt)
-plot_rating_curve(attr_tbl, "C:/Users/adele/OneDrive/Desktop/BYU/Dam Research/kenny stuff/results_example/28")
-plot_cross_sections(attr_tbl, cross_section, "C:/Users/adele/OneDrive/Desktop/BYU/Dam Research/kenny stuff/results_example/28", True)
-#
-# # this folder has the results from some example runs
-# all_results = "C:/Users/ki87ujmn/Downloads/rathcelon-example/results"
-# # these are the subdirectories for each rathcelon run
-# rath_runs = [os.path.join(all_results, d) for d in os.listdir(all_results) if os.path.isdir(os.path.join(all_results, d))]
+# lhd_id = "28"
+# result_dbf ="C:/Users/adele/OneDrive/Desktop/BYU/Dam Research/kenny stuff/results_example/28/VDT/28_Local_CurveFile.dbf"
+# result_txt = "C:/Users/adele/OneDrive/Desktop/BYU/Dam Research/kenny stuff/results_example/28/XS/28_XS_Out.txt"
+# attr_tbl = get_attribute_df(result_dbf)
+# cross_section = get_xs_df(result_txt)
+# plot_rating_curve(attr_tbl, "C:/Users/adele/OneDrive/Desktop/BYU/Dam Research/kenny stuff/results_example/28")
+# plot_cross_sections(attr_tbl, cross_section, "C:/Users/adele/OneDrive/Desktop/BYU/Dam Research/kenny stuff/results_example/28", True)
 
-# for rath_run in rath_runs:
-#     # the lhd_id is the name of each directory
-#     lhd_id = rath_run.split('//')[-1]
-#     # the dbf and txt will be in the same place for each file
-#     result_dbf = rath_run + f'/VDT/{lhd_id}_Local_CurveFile.dbf'
-#     result_txt = rath_run + f'/XS/{lhd_id}_XS_Out.txt'
-#     # get the attribute table from the dbf
-#     attr_tbl = get_attribute_df(result_dbf)
-#     # get the cross-section data from the txt
-#     cross_section = get_xs_df(result_txt)
-#     # plot rating curves and cross-sections
-#     plot_rating_curve(attr_tbl, rath_run)
-#     plot_cross_sections(attr_tbl, cross_section, rath_run, False)
+
+# this folder has the results from some example runs
+all_results = "C:/Users/ki87ujmn/Downloads/LHD_RathCelon/LHD_Results"
+# these are the subdirectories for each rathcelon run
+rath_runs = [os.path.join(all_results, d) for d in os.listdir(all_results) if os.path.isdir(os.path.join(all_results, d))]
+
+
+for rath_run in rath_runs:
+    # the lhd_id is the name of each directory
+    lhd_id = rath_run.split('\\')[-1]
+    # the dbf and txt will be in the same place for each file
+    result_dbf = rath_run + f'/VDT/{lhd_id}_Local_CurveFile.dbf'
+    result_txt = rath_run + f'/XS/{lhd_id}_XS_Out.txt'
+    # get the attribute table from the dbf
+    attr_tbl = get_attribute_df(result_dbf)
+    # get the cross-section data from the txt
+    cross_section = get_xs_df(result_txt)
+    # plot rating curves and cross-sections
+    plot_rating_curve(attr_tbl, rath_run)
+    plot_cross_sections(attr_tbl, cross_section, rath_run, False)
