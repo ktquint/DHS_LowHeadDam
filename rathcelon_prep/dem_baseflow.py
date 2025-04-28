@@ -18,11 +18,9 @@ def get_dem_dates(lat, lon):
               "outputFormat": "JSON"}
     response = requests.get(base_url, params=params)
     lidar_info = response.json().get("items", [])
-    return lidar_info['Start Date'] # idk if this is how it's formatted
+    return "help"# lidar_info['Start Date'] # idk if this is how it's formatted
 
 get_dem_dates(36.12085558,-95.98829985)
-
-
 
 
 def get_dem_discharge(lhd_df):
