@@ -41,23 +41,9 @@ def get_dem_dates(lat, lon):
               "outputFormat": "JSON"}
 
     response = requests.get(base_url, params=params)
-
-    # Check if the request was successful
-    if response.status_code == 200:
-        lidar_info = response.json().get("items", [])
-
-        # Check if items are returned
-        if lidar_info:
-            # Check if 'metaUrl' key exists
-            if 'metaUrl' in lidar_info[0]:
-                url = lidar_info[0]['metaUrl']
-                return get_start_date(url)
-            else:
-                return "metaUrl key not found in the response."
-        else:
-            return "No items returned for the given query."
-    else:
-        return f"Request failed with status code {response.status_code}"
+    lidar_info = response.json().get("items", [])
+    url = lidar_info[0]['metaUrl']
+    return get_start_date(url)
 
 
 get_dem_dates(36.12085558,-95.98829985)
