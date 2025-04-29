@@ -1,6 +1,30 @@
 import requests
+import re
 
 # Define the base URL
+
+def get_start_date(url):
+    """
+    Read the website as HTML and search for the parameter '<dt>Start Date</dt>' using regular expressions
+    """
+    # Send a GET request to the URL
+    response = requests.get(url)
+
+    # Check if the request was successful
+    if response.status_code == 200:
+        # Get the HTML content
+        html_content = response.text
+
+        # Use regular expressions to search for the "<dt>Start Date</dt>" tag
+        match = re.search(r'<dt>Start Date</dt>\s*<dd>(.*?)</dd>', html_content, re.IGNORECASE)
+
+        if match:
+            start_date_value = match.group(1).strip()
+            return f"Start Date: {start_date_value}"
+        else:
+            return "Start Date parameter not found."
+    else:
+        return f"Request failed with status code {response.status_code}"
 
 def get_dem_dates(lat, lon):
     """
@@ -8,17 +32,33 @@ def get_dem_dates(lat, lon):
     check the date the lidar was taken
     """
     bbox = (lon - 0.001, lat - 0.001, lon + 0.001, lat + 0.001)
-    dataset = 'Lidar Point Cloud'
+    dataset = "Lidar Point Cloud (LPC)"
     base_url = "https://tnmaccess.nationalmap.gov/api/v1/products"
 
     params = {"bbox": f"{bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]}",
               "datasets": dataset,
               "max": 1,
-              # "prodFormats": ["GeoTIFF"], # idk what to put here yet
               "outputFormat": "JSON"}
+
     response = requests.get(base_url, params=params)
-    lidar_info = response.json().get("items", [])
-    return lidar_info['Start Date'] # idk if this is how it's formatted
+
+    # Check if the request was successful
+    if response.status_code == 200:
+        lidar_info = response.json().get("items", [])
+
+        # Check if items are returned
+        if lidar_info:
+            # Check if 'metaUrl' key exists
+            if 'metaUrl' in lidar_info[0]:
+                url = lidar_info[0]['metaUrl']
+                return get_start_date(url)
+            else:
+                return "metaUrl key not found in the response."
+        else:
+            return "No items returned for the given query."
+    else:
+        return f"Request failed with status code {response.status_code}"
+
 
 get_dem_dates(36.12085558,-95.98829985)
 
