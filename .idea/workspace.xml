@@ -4,13 +4,21 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="a629c241-b42d-4445-a676-01ca5d3cdb55" name="Changes" comment="Paige">
+    <list default="true" id="a629c241-b42d-4445-a676-01ca5d3cdb55" name="Changes" comment="added classes.py this file will make dams and cross-section objects instead of working out of dataframes">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/rathcelon_analysis/classes.py" beforeDir="false" afterPath="$PROJECT_DIR$/rathcelon_analysis/classes.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Python Script" />
+      </list>
+    </option>
   </component>
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
@@ -23,8 +31,8 @@
 }</component>
   <component name="GithubPullRequestsUISettings">{
   &quot;selectedUrlAndAccountId&quot;: {
-    &quot;url&quot;: &quot;https://github.com/ktquint/DHS_LowHeadDam&quot;,
-    &quot;accountId&quot;: &quot;2f3f8a21-2d68-4296-a472-cd78a722642c&quot;
+    &quot;url&quot;: &quot;https://github.com/ktquint/DHS_LowHeadDam.git&quot;,
+    &quot;accountId&quot;: &quot;050829bf-ef17-456c-acdb-7dc6168f643e&quot;
   }
 }</component>
   <component name="ProjectColorInfo">{
@@ -37,6 +45,7 @@
   </component>
   <component name="PropertiesComponent">{
   &quot;keyToString&quot;: {
+    &quot;Python.dem_baseflow.executor&quot;: &quot;Run&quot;,
     &quot;Python.scratch.executor&quot;: &quot;Run&quot;,
     &quot;Python.stream.slope.executor&quot;: &quot;Run&quot;,
     &quot;Python.stream_slope.executor&quot;: &quot;Run&quot;,
@@ -44,7 +53,13 @@
     &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
     &quot;git-widget-placeholder&quot;: &quot;main&quot;,
     &quot;last_opened_file_path&quot;: &quot;C:/Users/pgordi&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable&quot;
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   },
   &quot;keyToStringList&quot;: {
     &quot;com.intellij.ide.scratch.ScratchImplUtil$2/New Scratch File&quot;: [
@@ -54,7 +69,7 @@
     ]
   }
 }</component>
-  <component name="RunManager" selected="Python.stream_slope">
+  <component name="RunManager" selected="Python.scratch">
     <configuration name="scratch" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
       <module name="DHS_LowHeadDam" />
       <option name="ENV_FILES" value="" />
@@ -68,6 +83,7 @@
       <option name="IS_MODULE_SDK" value="false" />
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
       <option name="SCRIPT_NAME" value="$APPLICATION_CONFIG_DIR$/scratches/scratch.py" />
       <option name="PARAMETERS" value="" />
       <option name="SHOW_COMMAND_LINE" value="false" />
@@ -90,6 +106,7 @@
       <option name="IS_MODULE_SDK" value="true" />
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
       <option name="SCRIPT_NAME" value="$PROJECT_DIR$/usgs_slopes/stream_slope.py" />
       <option name="PARAMETERS" value="" />
       <option name="SHOW_COMMAND_LINE" value="false" />
@@ -109,7 +126,8 @@
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
-        <option value="bundled-python-sdk-fc1d50d2d915-aa17d162503b-com.jetbrains.pycharm.community.sharedIndexes.bundled-PC-243.24978.54" />
+        <option value="bundled-js-predefined-d6986cc7102b-5c90d61e3bab-JavaScript-PY-242.23726.102" />
+        <option value="bundled-python-sdk-5e1850174b45-399fe30bd8c1-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-242.23726.102" />
       </set>
     </attachedChunks>
   </component>
@@ -121,6 +139,10 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1741644676622</updated>
+      <workItem from="1745858356447" duration="12000" />
+      <workItem from="1745864493573" duration="906000" />
+      <workItem from="1745869022061" duration="7852000" />
+      <workItem from="1745938516029" duration="3455000" />
     </task>
     <task id="LOCAL-00001" summary="paige's work">
       <option name="closed" value="true" />
@@ -186,24 +208,27 @@
       <option name="project" value="LOCAL" />
       <updated>1745424884714</updated>
     </task>
-    <task id="LOCAL-00009" summary="Paige Updates to search and download function">
+    <task id="LOCAL-00009" summary="started dem_baseflow.py">
       <option name="closed" value="true" />
-      <created>1745425024117</created>
+      <created>1745430889026</created>
       <option name="number" value="00009" />
       <option name="presentableId" value="LOCAL-00009" />
       <option name="project" value="LOCAL" />
-      <updated>1745425024117</updated>
+      <updated>1745430889026</updated>
     </task>
-    <task id="LOCAL-00010" summary="Paige Updates to search and download function">
+    <task id="LOCAL-00010" summary="added classes.py this file will make dams and cross-section objects instead of working out of dataframes">
       <option name="closed" value="true" />
-      <created>1745425046831</created>
+      <created>1745879371755</created>
       <option name="number" value="00010" />
       <option name="presentableId" value="LOCAL-00010" />
       <option name="project" value="LOCAL" />
-      <updated>1745425046831</updated>
+      <updated>1745879371755</updated>
     </task>
     <option name="localTasksCounter" value="11" />
     <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
     <option name="TAB_STATES">
@@ -220,6 +245,22 @@
     <MESSAGE value="paige's work" />
     <MESSAGE value="Paige - lines 76-83, added section to avoid duplicate downloads" />
     <MESSAGE value="Paige Updates to search and download function" />
-    <option name="LAST_COMMIT_MESSAGE" value="Paige Updates to search and download function" />
+    <MESSAGE value="added a few new files" />
+    <MESSAGE value="started dem_baseflow.py" />
+    <MESSAGE value="added classes.py this file will make dams and cross-section objects instead of working out of dataframes" />
+    <option name="LAST_COMMIT_MESSAGE" value="added classes.py this file will make dams and cross-section objects instead of working out of dataframes" />
+  </component>
+  <component name="com.intellij.coverage.CoverageDataManagerImpl">
+    <SUITE FILE_PATH="coverage/DHS_LowHeadDam$download_dem.coverage" NAME="download_dem Coverage Results" MODIFIED="1743525816754" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/rathcelon_prep" />
+    <SUITE FILE_PATH="coverage/DHS_LowHeadDam$cross_sections.coverage" NAME="cross_sections Coverage Results" MODIFIED="1742048900272" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/DHS_LowHeadDam$main.coverage" NAME="main Coverage Results" MODIFIED="1745346554393" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/DHS_LowHeadDam$scratch.coverage" NAME="scratch Coverage Results" MODIFIED="1745425955908" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/DHS_LowHeadDam$dam_height.coverage" NAME="dam_height Coverage Results" MODIFIED="1744059962902" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/rathcelon_analysis" />
+    <SUITE FILE_PATH="coverage/DHS_LowHeadDam$create_json.coverage" NAME="create_json Coverage Results" MODIFIED="1745346546540" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/rathcelon_prep" />
+    <SUITE FILE_PATH="coverage/DHS_LowHeadDam$rating_curves.coverage" NAME="rating_curves Coverage Results" MODIFIED="1742315032427" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/rathcelon_analysis" />
+    <SUITE FILE_PATH="coverage/DHS_LowHeadDam$stream_slope.coverage" NAME="stream_slope Coverage Results" MODIFIED="1745430259237" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/usgs_slopes" />
+    <SUITE FILE_PATH="coverage/DHS_LowHeadDam$dem_baseflow.coverage" NAME="dem_baseflow Coverage Results" MODIFIED="1745864786020" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/rathcelon_prep" />
+    <SUITE FILE_PATH="coverage/DHS_LowHeadDam$figures.coverage" NAME="figures Coverage Results" MODIFIED="1745419730883" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/rathcelon_analysis" />
+    <SUITE FILE_PATH="coverage/DHS_LowHeadDam$download_stream.coverage" NAME="download_stream Coverage Results" MODIFIED="1744921905925" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/rathcelon_prep" />
   </component>
 </project>
