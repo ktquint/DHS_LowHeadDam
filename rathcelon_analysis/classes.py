@@ -11,6 +11,9 @@ import numpy as np
 import pandas as pd
 import dbfread as dbf
 import matplotlib.pyplot as plt
+from scipy.optimize import fsolve
+
+g = 9.81 # grav. const.
 
 
 class CrossSection:
@@ -36,14 +39,18 @@ class CrossSection:
         # rating curve info
         self.a = xs_row['depth_a']
         self.b = xs_row['depth_b']
+        self.max_Q = xs_row['Q_max']
         # cross-section plot info
         self.wse = xs_row['wse_1']
-
-
-        # self.lateral = lateral
-        # self.elevation = elevation
-
-        # self.distance = distance
+        y_1 = xs_row['elev_1']
+        y_1 = y_1[::-1]
+        y_2 = xs_row['elev_2']
+        self.elevation = y_1 + y_2
+        x_1 = [0 + j * xs_row['lat_1'] for j in range(len(y_1))]
+        x_2 = [max(x_1) + j * xs_row['lat_2'] for j in range(len(y_2))]
+        self.lateral = x_1 + x_2
+        # fix this later...
+        self.distance = 100
 
 
     def trim_to_banks(self):
@@ -67,14 +74,14 @@ class CrossSection:
         plt.title(f'{self.location} Cross-Section {self.distance} meters from LHD No. {self.id}')
         plt.show()
 
-    def create_rating_curve(self, min_Q, max_Q):
-        x = np.linspace(min_Q, max_Q, 100)
+    def create_rating_curve(self):
+        x = np.linspace(0, self.max_Q, 100)
         y = self.a * x ** self.b
         plt.plot(x, y,
                  label=f'Rating Curve {self.distance} meters {self.location}: $y = {self.a:.3f} x^{{{self.b:.3f}}}$')
 
-    def plot_rating_curve(self, min_Q, max_Q):
-        x = np.linspace(min_Q, max_Q, 100)
+    def plot_rating_curve(self):
+        x = np.linspace(0, self.max_Q, 100)
         y = self.a * x ** self.b
         plt.plot(x, y, color='black', label=f'$y = {self.a:.3f} x^{{{self.b:.3f}}}$')
 
@@ -85,6 +92,8 @@ class CrossSection:
 
         plt.grid(True)
         plt.show()
+
+    # def plot_
 
 
 class Dam:
@@ -99,6 +108,10 @@ class Dam:
         self.latitude = id_row['Latitude'].values[0]
         self.longitude = id_row['Longitude'].values[0]
         self.cross_sections = []
+        self.top_width = 0
+        self.weir_length = 0
+        self.height = 0
+        self.h_overtop = []
         # find attributes based on the vdt and xs files
         vdt_loc = f'{project_dir}/LHD_Results/{self.id}/VDT/{self.id}_Local_CurveFile.dbf'
         xs_loc = f'{project_dir}/LHD_Results/{self.id}/XS/{self.id}_XS_Out.txt'
@@ -118,9 +131,13 @@ class Dam:
         xs_df['n_2'] = xs_df['n_2'].apply(ast.literal_eval)
         # let's merge the tables
         merged_df = pd.merge(vdt_df, xs_df, on=['Row', 'Col'], how='left')
+        self.max_Q = max(merged_df['QMax'].values)
         # let's go through each row of the df and add cross-sections to the dam.
         for index, row in merged_df.iterrows():
             self.cross_sections.append(CrossSection(lhd_id, index, row))
+
+    def set_dam_height(self):
+        self.height = 4
 
     def plot_rating_curves(self):
         for cross_section in self.cross_sections:
@@ -133,3 +150,38 @@ class Dam:
     def plot_cross_sections(self):
         for cross_section in self.cross_sections:
             cross_section.plot_cross_section()
+
+    def plot_flip_depth(self):
+        Q_array = np.linspace(0, self.max_Q, 100)
+        A = (2 * self.top_width / 3) * np.sqrt(2 * g)
+        H_list = []
+        for Q in Q_array:
+            H_guess: float = 1.0
+            H_sol = fsolve(self.weir_head, H_guess, args=(Q,A))
+            H_list.append(H_sol[0])
+        H_array = np.array(H_list)
+        self.h_overtop = H_array
+        y_flip = (H_array + self.height) / 1.1
+        plt.plot(Q_array, y_flip, label=f'Flip Depth (m)')
+
+    def plot_seq_depth(self):
+        Q_array = np.linspace(0, self.max_Q, 100)
+        y_1_list = []
+        for H in self.h_overtop:
+            x_0 = 0.5
+            x_sol = fsolve(self.weir_head, x_0, args=(H,))[0]
+            y_1 = x_sol * H
+            y_1_list.append(y_1)
+        y_1_array = np.array(y_1_list)
+
+        plt.plot(Q_array, y_1_array, label=f'Sequent Depth (m)')
+
+    def weir_head(self, H, Q, A):
+        return 0.611 * H**(3/2) + (0.075 / self.height) * H**(5/2) - Q/A
+    
+    def y1_over_H(self, x, H):
+        term_1 = x**3
+        term_2 = (1 + self.height / H) * x**2
+        term_3 = (4/9) * (0.611 + 0.075 * H / self.height)**2 + (1 + 0.1 * self.height/H)
+        return term_1 - term_2 + term_3
+        
