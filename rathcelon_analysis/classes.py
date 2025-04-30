@@ -7,6 +7,8 @@ the ID_XS_Out.txt file for each dam
 Dam holds the cross-section information
 """
 import ast
+import math
+import geoglows
 import numpy as np
 import pandas as pd
 import dbfread as dbf
@@ -15,9 +17,52 @@ from scipy.optimize import fsolve
 
 g = 9.81 # grav. const.
 
+def round_sigfig(num, sig_figs):
+    if num == 0:
+        return 0
+    else:
+        return round(num, sig_figs - int(math.floor(math.log10(abs(num)))) - 1)
+
+def get_streamflow(comid, date):
+    """
+    date needs to be in the format %Y-%m-%d
+    """
+    # this is all the data for the comid
+    all_Q = geoglows.data.retro_daily(comid)
+    # this is a dataframe that we'll extract the value from in the next line
+    Q_date = all_Q[all_Q.index.strftime('%Y-%m-%d') == date]
+    Q = Q_date.values[0,0]
+    return Q
+
+def weir_height(Q, b, y_u, tol=0.001):
+    """
+    Q = flow in river (cms)
+    b = bank width (m)
+    y_u = upstream depth (m)
+    """
+    q = Q / b # unit flow
+    # left-hand side
+    A = 3 * q / (2 * np.sqrt(2 * g))
+    # initial weir height estimate
+    p = 0.5 * y_u # we want to start with a positive number < y_u
+    # right-hand side
+    B = 0.611 * (y_u - p)**(3/2) + 0.075 * ((y_u - p)**(5/2))/p
+    counter = 0 # to avoid infinite loop
+    while abs(A - B) > tol:
+        counter += 1
+        if A < B:
+            p += 0.001
+        else:
+            p -= 0.001
+        # recalculate B after adjusting height
+        B = 0.611 * (y_u - p) ** (3 / 2) + 0.075 * ((y_u - p) ** (5 / 2)) / p
+        if counter > 10000:
+            break
+    return round(p, 3)
+
 
 class CrossSection:
-    def __init__(self, lhd_id, index, xs_row): # lateral, elevation, wse, distance, location, depth_a, depth_b, lat, lon):
+    def __init__(self, lhd_id, index, xs_row):
         """
         lateral is a [] of lateral distances
         elevation is a [] of elevations
@@ -39,7 +84,8 @@ class CrossSection:
         # rating curve info
         self.a = xs_row['depth_a']
         self.b = xs_row['depth_b']
-        self.max_Q = xs_row['Q_max']
+        self.max_Q = xs_row['QMax']
+        self.slope = round_sigfig(xs_row['slope'], 3)
         # cross-section plot info
         self.wse = xs_row['wse_1']
         y_1 = xs_row['elev_1']
@@ -51,7 +97,6 @@ class CrossSection:
         self.lateral = x_1 + x_2
         # fix this later...
         self.distance = 100
-
 
     def trim_to_banks(self):
         # this autofilled... i'll fit it later
@@ -66,22 +111,24 @@ class CrossSection:
             self.trim_to_banks()
 
         # cross-section elevations
-        plt.plot(self.lateral, self.elevation, color='black')
+        plt.plot(self.lateral, self.elevation,
+                 color='black', label=f'Downstream Slope: {self.slope}')
         # wse line
         # plt.plot(???, self.wse, color='blue')
         plt.xlabel('Lateral Distance (m)')
         plt.ylabel('Elevation (m)')
         plt.title(f'{self.location} Cross-Section {self.distance} meters from LHD No. {self.id}')
+        plt.legend(loc='upper left')
         plt.show()
 
     def create_rating_curve(self):
-        x = np.linspace(0, self.max_Q, 100)
+        x = np.linspace(1, self.max_Q, 100)
         y = self.a * x ** self.b
         plt.plot(x, y,
                  label=f'Rating Curve {self.distance} meters {self.location}: $y = {self.a:.3f} x^{{{self.b:.3f}}}$')
 
     def plot_rating_curve(self):
-        x = np.linspace(0, self.max_Q, 100)
+        x = np.linspace(1, self.max_Q, 100)
         y = self.a * x ** self.b
         plt.plot(x, y, color='black', label=f'$y = {self.a:.3f} x^{{{self.b:.3f}}}$')
 
@@ -93,8 +140,6 @@ class CrossSection:
         plt.grid(True)
         plt.show()
 
-    # def plot_
-
 
 class Dam:
     """
@@ -105,11 +150,13 @@ class Dam:
         self.id = lhd_id
         lhd_df = pd.read_csv(lhd_csv)
         id_row = lhd_df[lhd_df['ID'] == self.id]
-        self.latitude = id_row['Latitude'].values[0]
-        self.longitude = id_row['Longitude'].values[0]
+        self.latitude = id_row['latitude'].values[0]
+        self.longitude = id_row['longitude'].values[0]
         self.cross_sections = []
-        self.top_width = 0
-        self.weir_length = 0
+        # add make sure they have this from now on
+        # self.weir_length = id_row['weir_length'].values[0]
+
+        # self.top_width = 0
         self.height = 0
         self.h_overtop = []
         # find attributes based on the vdt and xs files
@@ -120,32 +167,41 @@ class Dam:
         vdt_df = pd.DataFrame(iter(vdt_dbf))
         # read in txt as data.frame
         xs_df = pd.read_csv(xs_loc, header=None, sep='\t')
-        xs_df.rename(columns={0: 'COMID', 1: 'Row', 2: 'Col',
-                              3: 'elev_1', 4: 'wse_1', 5: 'lat_1', 6: 'n_1',
-                              7: 'elev_2', 8: 'wse_2', 9: 'lat_2', 10: 'n_2'},
+        xs_df.rename(columns={0: 'COMID', 1: 'Row', 2: 'Col', 3: 'elev_1',
+                              4: 'wse_1', 5: 'lat_1', 6: 'n_1', 7: 'elev_2',
+                              8: 'wse_2', 9: 'lat_2', 10: 'n_2', 11: 'slope'},
                      inplace=True)
         # evaluate the strings as literals (lists)
         xs_df['elev_1'] = xs_df['elev_1'].apply(ast.literal_eval)
         xs_df['n_1'] = xs_df['n_1'].apply(ast.literal_eval)
         xs_df['elev_2'] = xs_df['elev_2'].apply(ast.literal_eval)
         xs_df['n_2'] = xs_df['n_2'].apply(ast.literal_eval)
-        # let's merge the tables
-        merged_df = pd.merge(vdt_df, xs_df, on=['Row', 'Col'], how='left')
+        # let's merge the tables (how='left' because vdt only contains the xs we want and xs has all of them)
+        merged_df = pd.merge(vdt_df, xs_df, on=['COMID', 'Row', 'Col'], how='left')
         self.max_Q = max(merged_df['QMax'].values)
         # let's go through each row of the df and add cross-sections to the dam.
         for index, row in merged_df.iterrows():
             self.cross_sections.append(CrossSection(lhd_id, index, row))
 
-    def set_dam_height(self):
-        self.height = 4
+        # let's add the dam height here
+
+        for cross_section in self.cross_sections[:-1]:
+            energy_up = self.cross_sections[-1].wse - min(cross_section.elevation)
+            print("weir height estimate: ")
+            print(weir_height(30, 100, energy_up))
+
+
+    def set_dam_height(self, P):
+        self.height = P
 
     def plot_rating_curves(self):
         for cross_section in self.cross_sections:
-            cross_section.plot_rating_curve()
-            plt.xlabel('Flow (m$^{3}$/s')
-            plt.ylabel('Depth (m)')
-            plt.title(f'Rating Curves for LHD No. {self.id}')
-            plt.show()
+            cross_section.create_rating_curve()
+        plt.xlabel('Flow (m$^{3}$/s')
+        plt.ylabel('Depth (m)')
+        plt.title(f'Rating Curves for LHD No. {self.id}')
+        plt.legend(title="Rating Curve Equations", loc='best', fontsize='small')
+        plt.show()
 
     def plot_cross_sections(self):
         for cross_section in self.cross_sections:
