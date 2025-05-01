@@ -24,35 +24,6 @@ def round_sigfig(num, sig_figs):
         return 0
     else:
         return round(num, sig_figs - int(math.floor(math.log10(abs(num)))) - 1)
-
-
-def get_streamflow(comid, date_range=None):
-    """
-    comid needs to be an int
-    date needs to be in the format %Y-%m-%d
-
-    returns average streamflow—for the entire record if no date is given, else it's the average on the given date
-    """
-    try:
-        comid = int(comid)
-    except ValueError:
-        raise ValueError("comid needs to be an int")
-
-    # this is all the data for the comid
-    historic_df = geoglows.data.retro_daily(comid)
-    historic_df.index = pd.to_datetime(historic_df.index)
-
-    if date_range is not None:
-        try:
-            subset_df = historic_df.loc[date_range[0]:date_range[1]]
-            Q = np.median(subset_df[comid])
-        except IndexError:
-            raise ValueError(f"NO data available for {date_range}")
-    else:
-        Q = np.median(historic_df[comid])
-
-    return Q
-
 def get_dem_dates(lat, lon):
     """
     Use lat/lon to get Lidar data used to make the DEM.
@@ -90,6 +61,33 @@ def get_dem_dates(lat, lon):
         return f"Start Date: {start_date_value}, End Date: {end_date_value}"
     else:
         return "Date parameters not found."
+
+def get_streamflow(comid,lat=None,long=None):
+    """
+    comid needs to be an int
+    date needs to be in the format %Y-%m-%d
+
+    returns average streamflow—for the entire record if no date is given, else it's the average on the given date
+    """
+    try:
+        comid = int(comid)
+    except ValueError:
+        raise ValueError("comid needs to be an int")
+
+    # this is all the data for the comid
+    historic_df = geoglows.data.retro_daily(comid)
+    historic_df.index = pd.to_datetime(historic_df.index)
+
+    if lat and long is not None:
+        try:
+            subset_df = historic_df.loc[date_range[0]:date_range[1]]
+            Q = np.median(subset_df[comid])
+        except IndexError:
+            raise ValueError(f"NO data available for {date_range}")
+    else:
+        Q = np.median(historic_df[comid])
+
+    return Q
 
 def weir_height(Q, b, y_u, tol=0.001):
     """
