@@ -23,16 +23,34 @@ def round_sigfig(num, sig_figs):
     else:
         return round(num, sig_figs - int(math.floor(math.log10(abs(num)))) - 1)
 
-def get_streamflow(comid, date):
+
+def get_streamflow(comid, date_range=None):
     """
+    comid needs to be an int
     date needs to be in the format %Y-%m-%d
+
+    returns average streamflow—for the entire record if no date is given, else it's the average on the given date
     """
+    try:
+        comid = int(comid)
+    except ValueError:
+        raise ValueError("comid needs to be an int")
+
     # this is all the data for the comid
-    all_Q = geoglows.data.retro_daily(comid)
-    # this is a dataframe that we'll extract the value from in the next line
-    Q_date = all_Q[all_Q.index.strftime('%Y-%m-%d') == date]
-    Q = Q_date.values[0,0]
+    historic_df = geoglows.data.retro_daily(comid)
+    historic_df.index = pd.to_datetime(historic_df.index)
+
+    if date_range != ["",""]:
+        try:
+            subset_df = historic_df.loc[date_range[0]:date_range[1]]
+            Q = np.median(subset_df[comid])
+        except IndexError:
+            raise ValueError(f"NO data available for {date_range}")
+    else:
+        Q = np.median(historic_df[comid])
+
     return Q
+
 
 def weir_height(Q, b, y_u, tol=0.001):
     """
@@ -98,10 +116,12 @@ class CrossSection:
         # fix this later...
         self.distance = 100
 
+
     def trim_to_banks(self):
         # this autofilled... i'll fit it later
         self.lateral = self.lateral[~np.isnan(self.lateral)]
         self.elevation = self.elevation[~np.isnan(self.elevation)]
+
 
     def plot_cross_section(self, in_banks=False):
         """
@@ -121,11 +141,13 @@ class CrossSection:
         plt.legend(loc='upper left')
         plt.show()
 
+
     def create_rating_curve(self):
         x = np.linspace(1, self.max_Q, 100)
         y = self.a * x ** self.b
         plt.plot(x, y,
                  label=f'Rating Curve {self.distance} meters {self.location}: $y = {self.a:.3f} x^{{{self.b:.3f}}}$')
+
 
     def plot_rating_curve(self):
         x = np.linspace(1, self.max_Q, 100)
@@ -147,14 +169,18 @@ class Dam:
     add cross-sections with information from vdt & cross_section files
     """
     def __init__(self, lhd_id, lhd_csv, project_dir):
+        #database information
         self.id = lhd_id
         lhd_df = pd.read_csv(lhd_csv)
         id_row = lhd_df[lhd_df['ID'] == self.id]
+
+        # geographic information
         self.latitude = id_row['latitude'].values[0]
         self.longitude = id_row['longitude'].values[0]
+
+        # physical information
         self.cross_sections = []
-        # add make sure they have this from now on
-        # self.weir_length = id_row['weir_length'].values[0]
+        self.weir_length = id_row['weir_length'].values[0]
 
         # self.top_width = 0
         self.height = 0
@@ -183,16 +209,31 @@ class Dam:
         for index, row in merged_df.iterrows():
             self.cross_sections.append(CrossSection(lhd_id, index, row))
 
+        # hydrologic information
+        self.comid = merged_df['COMID'].values[-1] # get the comid at the upstream cross-section
+        # now we'll define the baseflow for the DEM
+        self.dem_dates = [id_row['dem_start'].values[0], id_row['dem_end'].values[0]]
+        if not self.dem_dates: # if there is no date, we'll take the median flow
+            self.dem_flow = get_streamflow(self.comid)
+        else:
+            self.dem_flow = get_streamflow(self.comid, self.dem_dates)
+        # then we'll find the flow on the day of the fatality
+        self.fatality_date = id_row['fatality_date'].values[0]
+        self.fatality_flow = get_streamflow(self.comid, [self.fatality_date, self.fatality_date])
+        # self.Q_median = get_streamflow(self.comid)
+
         # let's add the dam height here
 
         for cross_section in self.cross_sections[:-1]:
             energy_up = self.cross_sections[-1].wse - min(cross_section.elevation)
             print("weir height estimate: ")
-            print(weir_height(30, 100, energy_up))
+            P_guess = weir_height(54.516042, self.weir_length, energy_up)
+            print(P_guess * 3.281)
 
 
     def set_dam_height(self, P):
         self.height = P
+
 
     def plot_rating_curves(self):
         for cross_section in self.cross_sections:
@@ -203,9 +244,11 @@ class Dam:
         plt.legend(title="Rating Curve Equations", loc='best', fontsize='small')
         plt.show()
 
+
     def plot_cross_sections(self):
         for cross_section in self.cross_sections:
             cross_section.plot_cross_section()
+
 
     def plot_flip_depth(self):
         Q_array = np.linspace(0, self.max_Q, 100)
@@ -220,6 +263,7 @@ class Dam:
         y_flip = (H_array + self.height) / 1.1
         plt.plot(Q_array, y_flip, label=f'Flip Depth (m)')
 
+
     def plot_seq_depth(self):
         Q_array = np.linspace(0, self.max_Q, 100)
         y_1_list = []
@@ -232,9 +276,11 @@ class Dam:
 
         plt.plot(Q_array, y_1_array, label=f'Sequent Depth (m)')
 
+
     def weir_head(self, H, Q, A):
         return 0.611 * H**(3/2) + (0.075 / self.height) * H**(5/2) - Q/A
-    
+
+
     def y1_over_H(self, x, H):
         term_1 = x**3
         term_2 = (1 + self.height / H) * x**2
