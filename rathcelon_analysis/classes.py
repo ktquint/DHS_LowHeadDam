@@ -14,6 +14,8 @@ import pandas as pd
 import dbfread as dbf
 import matplotlib.pyplot as plt
 from scipy.optimize import fsolve
+import requests
+import re
 
 g = 9.81 # grav. const.
 
@@ -40,7 +42,7 @@ def get_streamflow(comid, date_range=None):
     historic_df = geoglows.data.retro_daily(comid)
     historic_df.index = pd.to_datetime(historic_df.index)
 
-    if date_range != ["",""]:
+    if date_range is not None:
         try:
             subset_df = historic_df.loc[date_range[0]:date_range[1]]
             Q = np.median(subset_df[comid])
@@ -51,6 +53,43 @@ def get_streamflow(comid, date_range=None):
 
     return Q
 
+def get_dem_dates(lat, lon):
+    """
+    Use lat/lon to get Lidar data used to make the DEM.
+    Check the date the Lidar was taken.
+    """
+    bbox = (lon - 0.001, lat - 0.001, lon + 0.001, lat + 0.001)
+    dataset = "Lidar Point Cloud (LPC)"
+    base_url = "https://tnmaccess.nationalmap.gov/api/v1/products"
+
+    params = {
+        "bbox": f"{bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]}",
+        "datasets": dataset,
+        "max": 1,
+        "outputFormat": "JSON"
+    }
+    response = requests.get(base_url, params=params)
+
+    lidar_info = response.json().get("items", [])
+    if not lidar_info:
+        return "No Lidar data found for the given coordinates."
+
+    meta_url = lidar_info[0].get('metaUrl')
+    if not meta_url:
+        return "metaUrl key not found in the response."
+
+    response2 = requests.get(meta_url)
+    html_content = response2.text
+
+    match_start = re.search(r'<dt>Start Date</dt>\s*<dd>(.*?)</dd>', html_content, re.IGNORECASE)
+    match_end = re.search(r'<dt>End Date</dt>\s*<dd>(.*?)</dd>', html_content, re.IGNORECASE)
+
+    if match_start and match_end:
+        start_date_value = match_start.group(1).strip()
+        end_date_value = match_end.group(1).strip()
+        return f"Start Date: {start_date_value}, End Date: {end_date_value}"
+    else:
+        return "Date parameters not found."
 
 def weir_height(Q, b, y_u, tol=0.001):
     """
@@ -212,6 +251,8 @@ class Dam:
         # hydrologic information
         self.comid = merged_df['COMID'].values[-1] # get the comid at the upstream cross-section
         # now we'll define the baseflow for the DEM
+        self.dem_dates = get_dem_dates(self.latitude, self.longitude)
+
         self.dem_dates = [id_row['dem_start'].values[0], id_row['dem_end'].values[0]]
         if not self.dem_dates: # if there is no date, we'll take the median flow
             self.dem_flow = get_streamflow(self.comid)
