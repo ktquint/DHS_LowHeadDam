@@ -154,7 +154,7 @@ class CrossSection:
         y = self.a * x ** self.b
         plt.plot(x, y, color='black', label=f'$y = {self.a:.3f} x^{{{self.b:.3f}}}$')
 
-        plt.xlabel('Flow (m$^{3}$/s')
+        plt.xlabel('Flow (m$^{3}$/s)')
         plt.ylabel('Depth (m)')
         plt.title(f'{self.location} Rating Curve {self.distance} meters from LHD No. {self.id}')
         plt.legend(title=f'{self.location} Rating Curve Equation')
@@ -236,7 +236,7 @@ class Dam:
 
 
     def plot_rating_curves(self):
-        for cross_section in self.cross_sections:
+        for cross_section in self.cross_sections[:-1]:
             cross_section.create_rating_curve()
         plt.xlabel('Flow (m$^{3}$/s')
         plt.ylabel('Depth (m)')
