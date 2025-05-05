@@ -4,9 +4,10 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="a629c241-b42d-4445-a676-01ca5d3cdb55" name="Changes" comment="added classes.py this file will make dams and cross-section objects instead of working out of dataframes">
+    <list default="true" id="a629c241-b42d-4445-a676-01ca5d3cdb55" name="Changes" comment="Changed get_streamflow to take a lat lon instead of a date, will add get_dem_dates to get the dates">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/rathcelon_analysis/classes.py" beforeDir="false" afterPath="$PROJECT_DIR$/rathcelon_analysis/classes.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/rathcelon_prep/dem_baseflow.py" beforeDir="false" afterPath="$PROJECT_DIR$/rathcelon_prep/dem_baseflow.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -31,8 +32,8 @@
 }</component>
   <component name="GithubPullRequestsUISettings">{
   &quot;selectedUrlAndAccountId&quot;: {
-    &quot;url&quot;: &quot;https://github.com/ktquint/DHS_LowHeadDam.git&quot;,
-    &quot;accountId&quot;: &quot;050829bf-ef17-456c-acdb-7dc6168f643e&quot;
+    &quot;url&quot;: &quot;https://github.com/ktquint/DHS_LowHeadDam&quot;,
+    &quot;accountId&quot;: &quot;2f3f8a21-2d68-4296-a472-cd78a722642c&quot;
   }
 }</component>
   <component name="ProjectColorInfo">{
@@ -45,7 +46,11 @@
   </component>
   <component name="PropertiesComponent">{
   &quot;keyToString&quot;: {
+    &quot;Python.Date_Scratch_File.executor&quot;: &quot;Run&quot;,
+    &quot;Python.Stream_Download_Scratch.executor&quot;: &quot;Run&quot;,
+    &quot;Python.classes.executor&quot;: &quot;Run&quot;,
     &quot;Python.dem_baseflow.executor&quot;: &quot;Run&quot;,
+    &quot;Python.download_stream.executor&quot;: &quot;Run&quot;,
     &quot;Python.scratch.executor&quot;: &quot;Run&quot;,
     &quot;Python.stream.slope.executor&quot;: &quot;Run&quot;,
     &quot;Python.stream_slope.executor&quot;: &quot;Run&quot;,
@@ -69,8 +74,8 @@
     ]
   }
 }</component>
-  <component name="RunManager" selected="Python.scratch">
-    <configuration name="scratch" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+  <component name="RunManager" selected="Python.Date_Scratch_File">
+    <configuration name="Date_Scratch_File" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
       <module name="DHS_LowHeadDam" />
       <option name="ENV_FILES" value="" />
       <option name="INTERPRETER_OPTIONS" value="" />
@@ -83,8 +88,7 @@
       <option name="IS_MODULE_SDK" value="false" />
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
-      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
-      <option name="SCRIPT_NAME" value="$APPLICATION_CONFIG_DIR$/scratches/scratch.py" />
+      <option name="SCRIPT_NAME" value="$APPLICATION_CONFIG_DIR$/scratches/Date_Scratch_File.py" />
       <option name="PARAMETERS" value="" />
       <option name="SHOW_COMMAND_LINE" value="false" />
       <option name="EMULATE_TERMINAL" value="false" />
@@ -93,7 +97,7 @@
       <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
-    <configuration name="stream_slope" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+    <configuration name="Stream_Download_Scratch" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
       <module name="DHS_LowHeadDam" />
       <option name="ENV_FILES" value="" />
       <option name="INTERPRETER_OPTIONS" value="" />
@@ -102,12 +106,77 @@
         <env name="PYTHONUNBUFFERED" value="1" />
       </envs>
       <option name="SDK_HOME" value="" />
-      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/usgs_slopes" />
+      <option name="WORKING_DIRECTORY" value="$APPLICATION_CONFIG_DIR$/scratches" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$APPLICATION_CONFIG_DIR$/scratches/Stream_Download_Scratch.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="classes" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="DHS_LowHeadDam" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/rathcelon_analysis" />
       <option name="IS_MODULE_SDK" value="true" />
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
-      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/usgs_slopes/stream_slope.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/rathcelon_analysis/classes.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="dem_baseflow" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="DHS_LowHeadDam" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/rathcelon_prep" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/rathcelon_prep/dem_baseflow.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="download_stream" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="DHS_LowHeadDam" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/rathcelon_prep" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/rathcelon_prep/download_stream.py" />
       <option name="PARAMETERS" value="" />
       <option name="SHOW_COMMAND_LINE" value="false" />
       <option name="EMULATE_TERMINAL" value="false" />
@@ -118,16 +187,18 @@
     </configuration>
     <recent_temporary>
       <list>
-        <item itemvalue="Python.stream_slope" />
-        <item itemvalue="Python.scratch" />
+        <item itemvalue="Python.Date_Scratch_File" />
+        <item itemvalue="Python.dem_baseflow" />
+        <item itemvalue="Python.Stream_Download_Scratch" />
+        <item itemvalue="Python.classes" />
+        <item itemvalue="Python.download_stream" />
       </list>
     </recent_temporary>
   </component>
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
-        <option value="bundled-js-predefined-d6986cc7102b-5c90d61e3bab-JavaScript-PY-242.23726.102" />
-        <option value="bundled-python-sdk-5e1850174b45-399fe30bd8c1-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-242.23726.102" />
+        <option value="bundled-python-sdk-fc1d50d2d915-aa17d162503b-com.jetbrains.pycharm.community.sharedIndexes.bundled-PC-243.24978.54" />
       </set>
     </attachedChunks>
   </component>
@@ -224,7 +295,23 @@
       <option name="project" value="LOCAL" />
       <updated>1745879371755</updated>
     </task>
-    <option name="localTasksCounter" value="11" />
+    <task id="LOCAL-00011" summary="Consolidated Get_Start_Date and get_dem_dates into one function. Added the updated get_dem_dates function into classes.py and added it to the dam class">
+      <option name="closed" value="true" />
+      <created>1746130880400</created>
+      <option name="number" value="00011" />
+      <option name="presentableId" value="LOCAL-00011" />
+      <option name="project" value="LOCAL" />
+      <updated>1746130880400</updated>
+    </task>
+    <task id="LOCAL-00012" summary="Changed get_streamflow to take a lat lon instead of a date, will add get_dem_dates to get the dates">
+      <option name="closed" value="true" />
+      <created>1746134993687</created>
+      <option name="number" value="00012" />
+      <option name="presentableId" value="LOCAL-00012" />
+      <option name="project" value="LOCAL" />
+      <updated>1746134993687</updated>
+    </task>
+    <option name="localTasksCounter" value="13" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -235,7 +322,19 @@
       <map>
         <entry key="MAIN">
           <value>
-            <State />
+            <State>
+              <option name="FILTERS">
+                <map>
+                  <entry key="branch">
+                    <value>
+                      <list>
+                        <option value="main" />
+                      </list>
+                    </value>
+                  </entry>
+                </map>
+              </option>
+            </State>
           </value>
         </entry>
       </map>
@@ -247,8 +346,12 @@
     <MESSAGE value="Paige Updates to search and download function" />
     <MESSAGE value="added a few new files" />
     <MESSAGE value="started dem_baseflow.py" />
+    <MESSAGE value="Paige - added get_start_date funtion to read the metadata site as html to find the start date. Updated get_dem_dates to get the start date." />
     <MESSAGE value="added classes.py this file will make dams and cross-section objects instead of working out of dataframes" />
-    <option name="LAST_COMMIT_MESSAGE" value="added classes.py this file will make dams and cross-section objects instead of working out of dataframes" />
+    <MESSAGE value="Changes to get start date function" />
+    <MESSAGE value="Consolidated Get_Start_Date and get_dem_dates into one function. Added the updated get_dem_dates function into classes.py and added it to the dam class" />
+    <MESSAGE value="Changed get_streamflow to take a lat lon instead of a date, will add get_dem_dates to get the dates" />
+    <option name="LAST_COMMIT_MESSAGE" value="Changed get_streamflow to take a lat lon instead of a date, will add get_dem_dates to get the dates" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/DHS_LowHeadDam$download_dem.coverage" NAME="download_dem Coverage Results" MODIFIED="1743525816754" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/rathcelon_prep" />

@@ -1,52 +1,47 @@
 import requests
 import re
 
-# Define the base URL
-
-def get_start_date(url):
-    """
-    Read the website as HTML and search for the parameter '<dt>Start Date</dt>' using regular expressions
-    """
-    # Send a GET request to the URL
-    response = requests.get(url)
-
-    # Check if the request was successful
-    if response.status_code == 200:
-        # Get the HTML content
-        html_content = response.text
-
-        # Use regular expressions to search for the "<dt>Start Date</dt>" tag
-        match = re.search(r'<dt>Start Date</dt>\s*<dd>(.*?)</dd>', html_content, re.IGNORECASE)
-
-        if match:
-            start_date_value = match.group(1).strip()
-            return f"Start Date: {start_date_value}"
-        else:
-            return "Start Date parameter not found."
-    else:
-        return f"Request failed with status code {response.status_code}"
 
 def get_dem_dates(lat, lon):
     """
-    use lat/lon to get lidar data used to make the dem
-    check the date the lidar was taken
+    Use lat/lon to get Lidar data used to make the DEM.
+    Check the date the Lidar was taken.
     """
     bbox = (lon - 0.001, lat - 0.001, lon + 0.001, lat + 0.001)
     dataset = "Lidar Point Cloud (LPC)"
     base_url = "https://tnmaccess.nationalmap.gov/api/v1/products"
 
-    params = {"bbox": f"{bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]}",
-              "datasets": dataset,
-              "max": 1,
-              "outputFormat": "JSON"}
+    params = {
+        "bbox": f"{bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]}",
+        "datasets": dataset,
+        "max": 1,
+        "outputFormat": "JSON"
+    }
 
     response = requests.get(base_url, params=params)
     lidar_info = response.json().get("items", [])
-    url = lidar_info[0]['metaUrl']
-    return get_start_date(url)
 
+    if not lidar_info:
+        return "No Lidar data found for the given coordinates."
 
-get_dem_dates(36.12085558,-95.98829985)
+    meta_url = lidar_info[0].get('metaUrl')
+    if not meta_url:
+        return "metaUrl key not found in the response."
+
+    response2 = requests.get(meta_url)
+    html_content = response2.text
+
+    match_start = re.search(r'<dt>Start Date</dt>\s*<dd>(.*?)</dd>', html_content, re.IGNORECASE)
+    match_end = re.search(r'<dt>End Date</dt>\s*<dd>(.*?)</dd>', html_content, re.IGNORECASE)
+
+    if match_start and match_end:
+        start_date_value = match_start.group(1).strip()
+        end_date_value = match_end.group(1).strip()
+        return f"Start Date: {start_date_value}, End Date: {end_date_value}"
+    else:
+        return "Date parameters not found."
+
+print(get_dem_dates(36.12085558,-95.98829985))
 
 
 
