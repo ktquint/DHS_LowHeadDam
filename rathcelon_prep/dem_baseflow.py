@@ -41,7 +41,7 @@ def get_dem_dates(lat, lon):
     else:
         return "Date parameters not found."
 
-get_dem_dates(36.12085558,-95.98829985)
+print(get_dem_dates(36.12085558,-95.98829985))
 
 
 

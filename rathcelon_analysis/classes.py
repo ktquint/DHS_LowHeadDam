@@ -24,6 +24,7 @@ def round_sigfig(num, sig_figs):
         return 0
     else:
         return round(num, sig_figs - int(math.floor(math.log10(abs(num)))) - 1)
+
 def get_dem_dates(lat, lon):
     """
     Use lat/lon to get Lidar data used to make the DEM.
@@ -39,14 +40,17 @@ def get_dem_dates(lat, lon):
         "max": 1,
         "outputFormat": "JSON"
     }
-    response = requests.get(base_url, params=params)
 
+    response = requests.get(base_url, params=params)
     lidar_info = response.json().get("items", [])
+
     if not lidar_info:
+        print("No Lidar data found for the given coordinates.")
         return "No Lidar data found for the given coordinates."
 
     meta_url = lidar_info[0].get('metaUrl')
     if not meta_url:
+        print("metaUrl key not found in the response.")
         return "metaUrl key not found in the response."
 
     response2 = requests.get(meta_url)
@@ -58,16 +62,17 @@ def get_dem_dates(lat, lon):
     if match_start and match_end:
         start_date_value = match_start.group(1).strip()
         end_date_value = match_end.group(1).strip()
-        return f"Start Date: {start_date_value}, End Date: {end_date_value}"
+        return [start_date_value, end_date_value]
     else:
+        print("Date parameters not found.")
         return "Date parameters not found."
 
-def get_streamflow(comid,lat=None,long=None):
+def get_streamflow(comid, lat=None, lon=None):
     """
     comid needs to be an int
     date needs to be in the format %Y-%m-%d
 
-    returns average streamflow—for the entire record if no date is given, else it's the average on the given date
+    returns average streamflow—for the entire record if no lat-long is given, else it's the average from the dates the lidar was taken
     """
     try:
         comid = int(comid)
@@ -78,12 +83,14 @@ def get_streamflow(comid,lat=None,long=None):
     historic_df = geoglows.data.retro_daily(comid)
     historic_df.index = pd.to_datetime(historic_df.index)
 
-    if lat and long is not None:
+    if lat and lon is not None:
         try:
+            date_range = get_dem_dates(lat, lon)
             subset_df = historic_df.loc[date_range[0]:date_range[1]]
             Q = np.median(subset_df[comid])
         except IndexError:
-            raise ValueError(f"NO data available for {date_range}")
+            date_range = get_dem_dates(lat, lon)
+            raise ValueError(f"No data available for {date_range}")
     else:
         Q = np.median(historic_df[comid])
 
