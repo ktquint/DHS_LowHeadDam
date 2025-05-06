@@ -9,4 +9,4 @@ this is my attempt to convert Tony Wahl's spreadsheet to a python script
 # Date
 
 def wahl_excel(given_info):
-
+    return given_info

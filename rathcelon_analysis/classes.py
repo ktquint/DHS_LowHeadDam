@@ -25,6 +25,20 @@ def round_sigfig(num, sig_figs):
     else:
         return round(num, sig_figs - int(math.floor(math.log10(abs(num)))) - 1)
 
+
+def x_intercept(x_1, y_1, y_2):
+    for i in range(1, len(x_1)):
+        y_low, y_high = y_1[i-1], y_1[i]
+        x_low, x_high = x_1[i-1], x_1[i]
+
+        if (y_low - y_2) * (y_high - y_2) <= 0 and y_low != y_high:
+            # linearly interpolate
+            ratio = (y_2 - y_low) / (y_high - y_low)
+            x_2 = x_low + ratio * (x_high - x_low)
+            return x_2
+    return None
+
+
 def get_dem_dates(lat, lon):
     """
     Use lat/lon to get Lidar data used to make the DEM.
@@ -67,6 +81,7 @@ def get_dem_dates(lat, lon):
         print("Date parameters not found.")
         return "Date parameters not found."
 
+
 def get_streamflow(comid, lat=None, lon=None):
     """
     comid needs to be an int
@@ -95,6 +110,7 @@ def get_streamflow(comid, lat=None, lon=None):
         Q = np.median(historic_df[comid])
 
     return Q
+
 
 def weir_height(Q, b, y_u, tol=0.001):
     """
@@ -149,7 +165,6 @@ class CrossSection:
         self.max_Q = xs_row['QMax']
         self.slope = round_sigfig(xs_row['slope'], 3)
         # cross-section plot info
-        self.wse = xs_row['wse_1']
         y_1 = xs_row['elev_1']
         y_1 = y_1[::-1]
         y_2 = xs_row['elev_2']
@@ -157,28 +172,21 @@ class CrossSection:
         x_1 = [0 + j * xs_row['lat_1'] for j in range(len(y_1))]
         x_2 = [max(x_1) + j * xs_row['lat_2'] for j in range(len(y_2))]
         self.lateral = x_1 + x_2
+        # water surface info
+        self.wse = xs_row['wse_1']
+        self.wse_x_1 = x_intercept(x_1, y_1, self.wse)
+        self.wse_x_2 = x_intercept(x_2, y_2, self.wse)
         # fix this later...
         self.distance = 100
 
 
-    def trim_to_banks(self):
-        # this autofilled... i'll fit it later
-        self.lateral = self.lateral[~np.isnan(self.lateral)]
-        self.elevation = self.elevation[~np.isnan(self.elevation)]
-
-
-    def plot_cross_section(self, in_banks=False):
-        """
-        in_banks is bool.
-        """
-        if in_banks:
-            self.trim_to_banks()
-
+    def plot_cross_section(self):
         # cross-section elevations
         plt.plot(self.lateral, self.elevation,
                  color='black', label=f'Downstream Slope: {self.slope}')
         # wse line
-        # plt.plot(???, self.wse, color='blue')
+        plt.plot([self.wse_x_1, self.wse_x_2], [self.wse, self.wse], color='cyan', linestyle='--')
+        # plt.axhline(y=self.wse, linestyle=':', color='cyan')
         plt.xlabel('Lateral Distance (m)')
         plt.ylabel('Elevation (m)')
         plt.title(f'{self.location} Cross-Section {self.distance} meters from LHD No. {self.id}')
@@ -216,6 +224,15 @@ class Dam:
         #database information
         self.id = lhd_id
         lhd_df = pd.read_csv(lhd_csv)
+        # add height columns before I extract the row
+        P_guesses = ['P_1', 'P_2', 'P_3', 'P_4']
+        slope_est = ['s_1', 's_2', 's_3', 's_4']
+        for column in P_guesses:
+            if column not in lhd_df.columns:
+                lhd_df[column] = None
+        for column in slope_est:
+            if column not in lhd_df.columns:
+                lhd_df[column] = None
         id_row = lhd_df[lhd_df['ID'] == self.id]
 
         # geographic information
@@ -253,28 +270,20 @@ class Dam:
         for index, row in merged_df.iterrows():
             self.cross_sections.append(CrossSection(lhd_id, index, row))
 
-        # hydrologic information
-        self.comid = merged_df['COMID'].values[-1] # get the comid at the upstream cross-section
-        # now we'll define the baseflow for the DEM
-        self.dem_dates = get_dem_dates(self.latitude, self.longitude)
+        # # hydrologic information
+        self.known_baseflow = id_row['known_baseflow'].values[0]
+        # fatality flow will be added soon...
 
-        self.dem_dates = [id_row['dem_start'].values[0], id_row['dem_end'].values[0]]
-        if not self.dem_dates: # if there is no date, we'll take the median flow
-            self.dem_flow = get_streamflow(self.comid)
-        else:
-            self.dem_flow = get_streamflow(self.comid, self.dem_dates)
-        # then we'll find the flow on the day of the fatality
-        self.fatality_date = id_row['fatality_date'].values[0]
-        self.fatality_flow = get_streamflow(self.comid, [self.fatality_date, self.fatality_date])
-        # self.Q_median = get_streamflow(self.comid)
-
-        # let's add the dam height here
-
-        for cross_section in self.cross_sections[:-1]:
-            energy_up = self.cross_sections[-1].wse - min(cross_section.elevation)
-            print("weir height estimate: ")
-            P_guess = weir_height(54.516042, self.weir_length, energy_up)
-            print(P_guess * 3.281)
+        # let's add the dam height and slope to the csv
+        for i in range(len(self.cross_sections)-1):
+            energy_up = self.cross_sections[-1].wse - min(self.cross_sections[i].elevation)
+            P_i = weir_height(self.known_baseflow, self.weir_length, energy_up)
+            lhd_df.loc[lhd_df['ID'] == self.id, f'P_{i + 1}'] = P_i * 3.281 # convert to ft
+            s_i = self.cross_sections[i].slope
+            lhd_df.loc[lhd_df['ID'] == self.id, f's_{i + 1}'] = s_i
+        print("hi!")
+        # update the csv file
+        lhd_df.to_csv(lhd_csv, index=False)
 
 
     def set_dam_height(self, P):
@@ -284,7 +293,7 @@ class Dam:
     def plot_rating_curves(self):
         for cross_section in self.cross_sections[:-1]:
             cross_section.create_rating_curve()
-        plt.xlabel('Flow (m$^{3}$/s')
+        plt.xlabel('Flow (m$^{3}$/s)')
         plt.ylabel('Depth (m)')
         plt.title(f'Rating Curves for LHD No. {self.id}')
         plt.legend(title="Rating Curve Equations", loc='best', fontsize='small')
@@ -323,13 +332,13 @@ class Dam:
         plt.plot(Q_array, y_1_array, label=f'Sequent Depth (m)')
 
 
-    def weir_head(self, H, Q, A):
-        return 0.611 * H**(3/2) + (0.075 / self.height) * H**(5/2) - Q/A
-
-
-    def y1_over_H(self, x, H):
-        term_1 = x**3
-        term_2 = (1 + self.height / H) * x**2
-        term_3 = (4/9) * (0.611 + 0.075 * H / self.height)**2 + (1 + 0.1 * self.height/H)
-        return term_1 - term_2 + term_3
-        
+    # def weir_head(self, H, Q, A):
+    #     return 0.611 * H**(3/2) + (0.075 / self.height) * H**(5/2) - Q/A
+    #
+    #
+    # def y1_over_H(self, x, H):
+    #     term_1 = x**3
+    #     term_2 = (1 + self.height / H) * x**2
+    #     term_3 = (4/9) * (0.611 + 0.075 * H / self.height)**2 + (1 + 0.1 * self.height/H)
+    #     return term_1 - term_2 + term_3
+    #

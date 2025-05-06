@@ -1,5 +1,8 @@
-import requests
 import re
+import geoglows
+import requests
+import numpy as np
+import pandas as pd
 
 
 def get_dem_dates(lat, lon):
@@ -19,16 +22,20 @@ def get_dem_dates(lat, lon):
     }
 
     response = requests.get(base_url, params=params)
+    # print(response.text)
     lidar_info = response.json().get("items", [])
 
     if not lidar_info:
+        print("No Lidar data found for the given coordinates.")
         return "No Lidar data found for the given coordinates."
 
     meta_url = lidar_info[0].get('metaUrl')
     if not meta_url:
+        print("metaUrl key not found in the response.")
         return "metaUrl key not found in the response."
 
     response2 = requests.get(meta_url)
+    # print(response2.text)
     html_content = response2.text
 
     match_start = re.search(r'<dt>Start Date</dt>\s*<dd>(.*?)</dd>', html_content, re.IGNORECASE)
@@ -37,55 +44,68 @@ def get_dem_dates(lat, lon):
     if match_start and match_end:
         start_date_value = match_start.group(1).strip()
         end_date_value = match_end.group(1).strip()
-        return f"Start Date: {start_date_value}, End Date: {end_date_value}"
+        return [start_date_value, end_date_value]
     else:
+        print("Date parameters not found.")
         return "Date parameters not found."
 
-print(get_dem_dates(36.12085558,-95.98829985))
 
-
-
-
-def get_dem_discharge(lhd_df):
+def get_streamflow(comid, lat=None, lon=None):
     """
-    lhd_df: must have lat/lon column
-    from lat/lon we get DEM data (metadata)
-    lat/lon will also give us river_id??
-    metadata will give us data
+    comid needs to be an int
+    date needs to be in the format %Y-%m-%d
+
+    returns average streamflow—for the entire record if no lat-long is given, else it's the average from the dates the lidar was taken
     """
-    lhd_df["dem_baseflow"] = ""  # initialize column
-    base_url = "https://geoglows.ecmwf.int/api/v2/retrospectivedaily"
+    try:
+        comid = int(comid)
+    except ValueError:
+        raise ValueError("comid needs to be an int")
 
+    # this is all the data for the comid
+    historic_df = geoglows.data.retro_daily(comid)
+    historic_df.index = pd.to_datetime(historic_df.index)
 
+    if lat and lon is not None:
+        try:
+            date_range = get_dem_dates(lat, lon)
+            subset_df = historic_df.loc[date_range[0]:date_range[1]]
+            Q = np.median(subset_df[comid])
+        except IndexError:
+            date_range = get_dem_dates(lat, lon)
+            raise ValueError(f"No data available for {date_range}")
+    else:
+        Q = np.median(historic_df[comid])
+
+    return Q
+
+def add_known_baseflow(lhd_df):
+    lhd_df['known_baseflow'] = ""
     for index, row in lhd_df.iterrows():
-        # lat = row.latitude
-        # lon = row.longitude
-
-        # eventually river_id will come from lat/lon
-        river_id = row.river_id
-        # dem_date will come from the dem metadata
-        dem_date = '20170101'
-
-        # update parameters for the specific dam/dem
-        river_url = f"{base_url}/{river_id}"
-        params = {
-            # 'river_id': river_id, # bruh, it doesn't recognize river_id here
-            'format': 'json',
-            'start_date': dem_date,
-            'end_date': dem_date,
-            'bias_corrected': True
-        }
-
-        # Make the request
-        response = requests.get(river_url, params=params)
-
-        # Check if the request was successful
-        if response.status_code == 200:
-            data = response.json()
-            baseflow = data[river_id]
-            lhd_df.at[index, 'dem_baseflow'] = baseflow
-        else:
-            print(f"Error: {response.status_code}")
-            print(response.json())  # Print the error message for debugging
-
+        linkno = row.LINKNO
+        lat = row.latitude
+        lon = row.longitude
+        dem_streamflow = get_streamflow(linkno, lat, lon)
+        lhd_df.at[index, "known_baseflow"] = dem_streamflow
+        print(f'index: {index}')
+        print(f'known baseflow: {dem_streamflow}')
     return lhd_df
+
+
+def add_dem_dates(lhd_df):
+    lhd_df['dem_start'] = ""
+    lhd_df['dem_end'] = ""
+    for index, row in lhd_df.iterrows():
+        lat = row.latitude
+        lon = row.longitude
+        lhd_df.at[index, "dem_start"] = get_dem_dates(lat, lon)[0]
+        lhd_df.at[index, "dem_end"] = get_dem_dates(lat, lon)[1]
+    return lhd_df
+
+"""
+!!! Test case !!!
+"""
+
+# lhd_test = pd.read_csv("C:/Users/ki87ujmn/Downloads/LHD_RathCelon/LowHead_Dam_Database.csv")
+# baseflows = add_known_baseflow(lhd_test)
+# baseflows.to_csv("C:/Users/ki87ujmn/Downloads/LHD_RathCelon/LowHead_Dam_Database.csv", index=False)

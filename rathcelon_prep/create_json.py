@@ -1,6 +1,6 @@
 import json
 import pandas as pd
-from typing import Any
+from typing import Any, TextIO
 
 
 def rathcelon_input (lhd_csv, output_loc):
@@ -14,6 +14,7 @@ def rathcelon_input (lhd_csv, output_loc):
         flowline = row["flowline"]
         dem_dir = row["dem_dir"]
         output_dir = row["output_dir"]
+        known_baseflow = row["known_baseflow"]
         dam_dict = {
             "name" : name,
             "dam_csv" : dam_csv,
@@ -25,7 +26,8 @@ def rathcelon_input (lhd_csv, output_loc):
             "output_dir" : output_dir,
             "process_stream_network" : True,
             "find_banks_based_on_landcover" : False,
-            "create_reach_average_curve_file" : False
+            "create_reach_average_curve_file" : False,
+            "known_baseflow": known_baseflow
             }
         dams.append(dam_dict)
     input_data = {
