@@ -101,11 +101,3 @@ def add_dem_dates(lhd_df):
         lhd_df.at[index, "dem_start"] = get_dem_dates(lat, lon)[0]
         lhd_df.at[index, "dem_end"] = get_dem_dates(lat, lon)[1]
     return lhd_df
-
-"""
-!!! Test case !!!
-"""
-
-# lhd_test = pd.read_csv("C:/Users/ki87ujmn/Downloads/LHD_RathCelon/LowHead_Dam_Database.csv")
-# baseflows = add_known_baseflow(lhd_test)
-# baseflows.to_csv("C:/Users/ki87ujmn/Downloads/LHD_RathCelon/LowHead_Dam_Database.csv", index=False)

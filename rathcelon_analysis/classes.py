@@ -112,6 +112,43 @@ def get_streamflow(comid, lat=None, lon=None):
     return Q
 
 
+def dam_height(Q, b, delta_wse, y_t, delta_z=0):
+    """
+    eq.1
+    P = delta_wse - H + y_t + dela_z
+    ... but we need to find H
+    also—all these calcs are in metric units
+
+    eq.2
+    q = (2/3) * C_w * np.sqrt(2 * g) * H**(3/2)
+    where,
+    C_w = 0.611 + 0.075 * H/P
+    """
+
+    # constant terms
+    q = Q/b  # discharge (m^2/s)
+    ## derived constants
+    A = (2 / 3) * np.sqrt(2 * g)
+    D = delta_wse + y_t + delta_z  # total pressure head + elevation
+
+    # Function to solve
+    def func(H):
+        if H >= D:  # avoid division by zero or negative P
+            return 1e6
+        lhs = q / A
+        rhs = 0.611 * H ** (3 / 2) + 0.075 * H ** (5 / 2) / (D - H)
+        return lhs - rhs
+
+    # Initial guess for H (must be less than D)
+    H_0 = D * 0.8
+    # Solve for H
+    H_sol = fsolve(func, H_0)[0]
+
+    # plug H into eq.1
+    P = delta_wse - H_sol + y_t + delta_z
+    return round(P, 3)
+
+
 def weir_height(Q, b, y_u, tol=0.001):
     """
     Q = flow in river (cms)
@@ -186,7 +223,6 @@ class CrossSection:
                  color='black', label=f'Downstream Slope: {self.slope}')
         # wse line
         plt.plot([self.wse_x_1, self.wse_x_2], [self.wse, self.wse], color='cyan', linestyle='--')
-        # plt.axhline(y=self.wse, linestyle=':', color='cyan')
         plt.xlabel('Lateral Distance (m)')
         plt.ylabel('Elevation (m)')
         plt.title(f'{self.location} Cross-Section {self.distance} meters from LHD No. {self.id}')
@@ -276,12 +312,18 @@ class Dam:
 
         # let's add the dam height and slope to the csv
         for i in range(len(self.cross_sections)-1):
-            energy_up = self.cross_sections[-1].wse - min(self.cross_sections[i].elevation)
-            P_i = weir_height(self.known_baseflow, self.weir_length, energy_up)
+            Q_i = self.known_baseflow
+            L_i = self.weir_length
+            y_i = self.cross_sections[i].a * Q_i**self.cross_sections[i].b
+            delta_wse_i = self.cross_sections[-1].wse - self.cross_sections[i].wse
+
+            # energy_up = self.cross_sections[-1].wse - min(self.cross_sections[i].elevation)
+
+            P_i = dam_height(Q_i, L_i, delta_wse_i, y_i)
             lhd_df.loc[lhd_df['ID'] == self.id, f'P_{i + 1}'] = P_i * 3.281 # convert to ft
             s_i = self.cross_sections[i].slope
             lhd_df.loc[lhd_df['ID'] == self.id, f's_{i + 1}'] = s_i
-        print("hi!")
+
         # update the csv file
         lhd_df.to_csv(lhd_csv, index=False)
 
@@ -305,18 +347,18 @@ class Dam:
             cross_section.plot_cross_section()
 
 
-    def plot_flip_depth(self):
-        Q_array = np.linspace(0, self.max_Q, 100)
-        A = (2 * self.top_width / 3) * np.sqrt(2 * g)
-        H_list = []
-        for Q in Q_array:
-            H_guess: float = 1.0
-            H_sol = fsolve(self.weir_head, H_guess, args=(Q,A))
-            H_list.append(H_sol[0])
-        H_array = np.array(H_list)
-        self.h_overtop = H_array
-        y_flip = (H_array + self.height) / 1.1
-        plt.plot(Q_array, y_flip, label=f'Flip Depth (m)')
+    # def plot_flip_depth(self):
+    #     Q_array = np.linspace(0, self.max_Q, 100)
+    #     A = (2 * self.top_width / 3) * np.sqrt(2 * g)
+    #     H_list = []
+    #     for Q in Q_array:
+    #         H_guess: float = 1.0
+    #         H_sol = fsolve(self.weir_head, H_guess, args=(Q,A))
+    #         H_list.append(H_sol[0])
+    #     H_array = np.array(H_list)
+    #     self.h_overtop = H_array
+    #     y_flip = (H_array + self.height) / 1.1
+    #     plt.plot(Q_array, y_flip, label=f'Flip Depth (m)')
 
 
     def plot_seq_depth(self):
@@ -330,15 +372,3 @@ class Dam:
         y_1_array = np.array(y_1_list)
 
         plt.plot(Q_array, y_1_array, label=f'Sequent Depth (m)')
-
-
-    # def weir_head(self, H, Q, A):
-    #     return 0.611 * H**(3/2) + (0.075 / self.height) * H**(5/2) - Q/A
-    #
-    #
-    # def y1_over_H(self, x, H):
-    #     term_1 = x**3
-    #     term_2 = (1 + self.height / H) * x**2
-    #     term_3 = (4/9) * (0.611 + 0.075 * H / self.height)**2 + (1 + 0.1 * self.height/H)
-    #     return term_1 - term_2 + term_3
-    #
