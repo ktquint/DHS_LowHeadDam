@@ -329,7 +329,6 @@ class CrossSection:
         plt.plot(depth_df["Q"]*35.315, depth_df["Y_2"]*3.281,
                  label="Sequent Depth", color='gray', linestyle='-')
 
-
         # make the plot look more presentable
         plt.grid(True)
         plt.xlim(left=0)
