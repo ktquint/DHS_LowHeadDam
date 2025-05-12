@@ -6,6 +6,7 @@ import pandas as pd
 
 
 def get_dem_dates(lat, lon):
+
     """
     Use lat/lon to get Lidar data used to make the DEM.
     Check the date the Lidar was taken.
