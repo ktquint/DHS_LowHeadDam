@@ -19,6 +19,11 @@ import re
 
 g = 9.81 # grav. const.
 
+
+def eq_3(H, P, q):
+    return (2 / 3) * (0.611 + 0.075 * (H / P)) * np.sqrt(2 * g) * H ** (3/2) - q
+
+
 def round_sigfig(num, sig_figs):
     if num == 0:
         return 0
@@ -177,7 +182,7 @@ def weir_height(Q, b, y_u, tol=0.001):
 
 
 class CrossSection:
-    def __init__(self, lhd_id, index, xs_row):
+    def __init__(self, index, xs_row, id_row):
         """
         lateral is a [] of lateral distances
         elevation is a [] of elevations
@@ -188,7 +193,7 @@ class CrossSection:
         rating curve eq. d = a * Q **b
         depth_a is a & depth_b is b
         """
-        self.id = lhd_id
+        self.id = id_row['ID'].values[0]
         # geospatial info
         self.lat = xs_row['Lat']
         self.lon = xs_row['Lon']
@@ -201,6 +206,7 @@ class CrossSection:
         self.b = xs_row['depth_b']
         self.max_Q = xs_row['QMax']
         self.slope = round_sigfig(xs_row['slope'], 3)
+        self.L = id_row['weir_length']
         # cross-section plot info
         y_1 = xs_row['elev_1']
         y_1 = y_1[::-1]
@@ -215,6 +221,11 @@ class CrossSection:
         self.wse_x_2 = x_intercept(x_2, y_2, self.wse)
         # fix this later...
         self.distance = 100
+        self.P = ""
+
+
+    def set_dam_height(self, P):
+        self.P = P
 
 
     def plot_cross_section(self):
@@ -249,6 +260,89 @@ class CrossSection:
 
         plt.grid(True)
         plt.show()
+
+
+    def plot_flip_sequent(self):
+        Q = np.linspace(1, self.max_Q, 100)
+        Y_T = self.a * Q ** self.b
+        depth_dict = {"Q": Q, "Y_T": Y_T}
+        depth_df = pd.DataFrame(depth_dict)
+        # Ensure self.L is a single value or access the first element if it's a Series
+        if isinstance(self.L, pd.Series):
+            depth_df["L"] = float(self.L.iloc[0])
+        else:
+            depth_df["L"] = float(self.L)
+        depth_df["P"] = self.P
+
+        # hydraulic calcs
+        depth_df["H"] = ""
+        for index, row in depth_df.iterrows():
+            H_guess = 1.0
+            P_i = row["P"]
+            q_i = row["Q"] / row["L"]
+            H_solution = fsolve(eq_3, H_guess, args=(P_i, q_i))
+            depth_df.at[index, "H"] = H_solution
+
+        depth_df["H+P"] = depth_df["H"] + depth_df["P"]
+        depth_df["H/(H+P)"] = depth_df["H"] / depth_df["H+P"]
+        depth_df["C_W"] = 0.611 + 0.075 * (depth_df["H"] / depth_df["P"])
+        depth_df["C_D"] = (2/3) * depth_df["C_W"] * np.sqrt(2 *g)
+        depth_df["C_L"] = 0.1 * depth_df["P"] / depth_df["H"]
+
+        # ideal jump calcs
+        depth_df["Y_1/H"] = ""
+        for index, row in depth_df.iterrows():
+            a = 1
+            b = -(1 + row["P"] / row["H"])
+            c = 0
+            d = (4 / 9) * row["C_W"] * (1 + row["C_L"])
+            coeffs = [a, b, c, d]
+            roots = np.roots(coeffs)
+
+            positive_real_roots = [r.real for r in roots if np.isreal(r) and r.real > 0]
+            try:
+                depth_df.at[index, "Y_1/H"] = min(positive_real_roots)
+            except ValueError: # if there are no real roots, use the last real value we found... only happens on one
+                depth_df.at[index, "Y_1/H"] = depth_df.at[index-1, "Y_1/H"]
+
+        depth_df["Y_1"] = depth_df["Y_1/H"] * depth_df["H"]
+        depth_df["V_1"] = depth_df["Q"] / depth_df["L"] / depth_df["Y_1"]
+        depth_df["F_1"] = depth_df["V_1"] / g ** 0.5 / depth_df["Y_1"] ** 0.5
+        depth_df["Y_2/H"] = depth_df["Y_1/H"] / 2 * (-1 + (1 + 8 * depth_df["F_1"] ** 2) ** 0.5)
+        depth_df["Y_2"] = depth_df["Y_2/H"] * depth_df["H"]
+
+        # depth_df["Y_T"] is already calculated
+        depth_df["S"] = (depth_df["Y_T"] - depth_df["Y_2"]) / depth_df["Y_2"]
+
+        # submerged hydraulic jump
+        depth_df["Y_Flip"] = depth_df["H+P"] / 1.1
+
+        # plot all 3 rating curves
+        # plt.plot(depth_df["Q"], depth_df["Y_Flip"], label="Flip Depth")
+        # plt.plot(depth_df["Q"], depth_df["Y_T"], label="Tailwater Depth")
+        # plt.plot(depth_df["Q"], depth_df["Y_2"], label="Sequent Depth")
+        # american units *eagle screech*
+        plt.plot(depth_df["Q"]*35.315, depth_df["Y_Flip"]*3.281,
+                 label="Flip Depth", color='gray', linestyle='--')
+        plt.plot(depth_df["Q"]*35.315, depth_df["Y_T"]*3.281,
+                 label="Tailwater Depth", color='dodgerblue', linestyle='-')
+        plt.plot(depth_df["Q"]*35.315, depth_df["Y_2"]*3.281,
+                 label="Sequent Depth", color='gray', linestyle='-')
+
+        # add labels and title then show
+        # plt.xlabel('Discharge (m$^{3}$/s)')
+        # plt.ylabel('Depth (m)')
+        plt.grid(True)
+        plt.xlabel('Discharge (ft$^{3}$/s)')
+        plt.ylabel('Depth (ft)')
+        plt.title(f'Submerged Hydraulic Jumps at Low-Head Dam No. {self.id}')
+        plt.legend(loc='upper left')
+        plt.show()
+
+
+    def plot_fatal_flow(self):
+        plt.plot()
+        return
 
 
 class Dam:
@@ -304,7 +398,7 @@ class Dam:
         self.max_Q = max(merged_df['QMax'].values)
         # let's go through each row of the df and add cross-sections to the dam.
         for index, row in merged_df.iterrows():
-            self.cross_sections.append(CrossSection(lhd_id, index, row))
+            self.cross_sections.append(CrossSection(index, row, id_row))
 
         # # hydrologic information
         self.known_baseflow = id_row['known_baseflow'].values[0]
@@ -318,8 +412,8 @@ class Dam:
             delta_wse_i = self.cross_sections[-1].wse - self.cross_sections[i].wse
 
             # energy_up = self.cross_sections[-1].wse - min(self.cross_sections[i].elevation)
-
             P_i = dam_height(Q_i, L_i, delta_wse_i, y_i)
+            self.cross_sections[i].set_dam_height(P_i)
             lhd_df.loc[lhd_df['ID'] == self.id, f'P_{i + 1}'] = P_i * 3.281 # convert to ft
             s_i = self.cross_sections[i].slope
             lhd_df.loc[lhd_df['ID'] == self.id, f's_{i + 1}'] = s_i
@@ -346,29 +440,6 @@ class Dam:
         for cross_section in self.cross_sections:
             cross_section.plot_cross_section()
 
-
-    # def plot_flip_depth(self):
-    #     Q_array = np.linspace(0, self.max_Q, 100)
-    #     A = (2 * self.top_width / 3) * np.sqrt(2 * g)
-    #     H_list = []
-    #     for Q in Q_array:
-    #         H_guess: float = 1.0
-    #         H_sol = fsolve(self.weir_head, H_guess, args=(Q,A))
-    #         H_list.append(H_sol[0])
-    #     H_array = np.array(H_list)
-    #     self.h_overtop = H_array
-    #     y_flip = (H_array + self.height) / 1.1
-    #     plt.plot(Q_array, y_flip, label=f'Flip Depth (m)')
-
-
-    def plot_seq_depth(self):
-        Q_array = np.linspace(0, self.max_Q, 100)
-        y_1_list = []
-        for H in self.h_overtop:
-            x_0 = 0.5
-            x_sol = fsolve(self.weir_head, x_0, args=(H,))[0]
-            y_1 = x_sol * H
-            y_1_list.append(y_1)
-        y_1_array = np.array(y_1_list)
-
-        plt.plot(Q_array, y_1_array, label=f'Sequent Depth (m)')
+    def plot_all_curves(self):
+        for cross_section in self.cross_sections[:-1]:
+            cross_section.plot_flip_sequent()
