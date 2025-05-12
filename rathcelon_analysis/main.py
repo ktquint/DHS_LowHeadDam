@@ -1,14 +1,6 @@
 import os
 from classes import Dam
 
-"""
-if you're going to have a separate main
-you need to figure out what to do about
-lhd_id. e.g., make a new one in each of
-the functions based on the file name or
-something like that.
-"""
-
 
 # this folder has the results from some example runs
 project_dir = "C:/Users/ki87ujmn/Downloads/rathcelon-example"

@@ -329,12 +329,18 @@ class CrossSection:
         plt.plot(depth_df["Q"]*35.315, depth_df["Y_2"]*3.281,
                  label="Sequent Depth", color='gray', linestyle='-')
 
-        # add labels and title then show
-        # plt.xlabel('Discharge (m$^{3}$/s)')
-        # plt.ylabel('Depth (m)')
+
+        # make the plot look more presentable
         plt.grid(True)
+        plt.xlim(left=0)
+        plt.ylim(bottom=0)
+
+        # add labels and title then show
         plt.xlabel('Discharge (ft$^{3}$/s)')
         plt.ylabel('Depth (ft)')
+        # plt.xlabel('Discharge (m$^{3}$/s)')
+        # plt.ylabel('Depth (m)')
+
         plt.title(f'Submerged Hydraulic Jumps at Low-Head Dam No. {self.id}')
         plt.legend(loc='upper left')
         plt.show()
