@@ -12,10 +12,19 @@ import geoglows
 import numpy as np
 import pandas as pd
 import dbfread as dbf
+from typing import Hashable
 import matplotlib.pyplot as plt
 from scipy.optimize import fsolve
-import requests
-import re
+
+import pyproj
+import rasterio
+import geopandas as gpd
+import contextily as ctx
+from rasterio.plot import show
+from rasterio.io import MemoryFile
+from matplotlib.ticker import FixedLocator
+from rasterio.warp import calculate_default_transform, reproject, Resampling
+
 
 g = 9.81 # grav. const.
 
@@ -44,50 +53,7 @@ def x_intercept(x_1, y_1, y_2):
     return None
 
 
-def get_dem_dates(lat, lon):
-    """
-    Use lat/lon to get Lidar data used to make the DEM.
-    Check the date the Lidar was taken.
-    """
-    bbox = (lon - 0.001, lat - 0.001, lon + 0.001, lat + 0.001)
-    dataset = "Lidar Point Cloud (LPC)"
-    base_url = "https://tnmaccess.nationalmap.gov/api/v1/products"
-
-    params = {
-        "bbox": f"{bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]}",
-        "datasets": dataset,
-        "max": 1,
-        "outputFormat": "JSON"
-    }
-
-    response = requests.get(base_url, params=params)
-    lidar_info = response.json().get("items", [])
-
-    if not lidar_info:
-        print("No Lidar data found for the given coordinates.")
-        return "No Lidar data found for the given coordinates."
-
-    meta_url = lidar_info[0].get('metaUrl')
-    if not meta_url:
-        print("metaUrl key not found in the response.")
-        return "metaUrl key not found in the response."
-
-    response2 = requests.get(meta_url)
-    html_content = response2.text
-
-    match_start = re.search(r'<dt>Start Date</dt>\s*<dd>(.*?)</dd>', html_content, re.IGNORECASE)
-    match_end = re.search(r'<dt>End Date</dt>\s*<dd>(.*?)</dd>', html_content, re.IGNORECASE)
-
-    if match_start and match_end:
-        start_date_value = match_start.group(1).strip()
-        end_date_value = match_end.group(1).strip()
-        return [start_date_value, end_date_value]
-    else:
-        print("Date parameters not found.")
-        return "Date parameters not found."
-
-
-def get_streamflow(comid, lat=None, lon=None):
+def get_streamflow(comid, date):
     """
     comid needs to be an int
     date needs to be in the format %Y-%m-%d
@@ -103,18 +69,18 @@ def get_streamflow(comid, lat=None, lon=None):
     historic_df = geoglows.data.retro_daily(comid)
     historic_df.index = pd.to_datetime(historic_df.index)
 
-    if lat and lon is not None:
-        try:
-            date_range = get_dem_dates(lat, lon)
-            subset_df = historic_df.loc[date_range[0]:date_range[1]]
-            Q = np.median(subset_df[comid])
-        except IndexError:
-            date_range = get_dem_dates(lat, lon)
-            raise ValueError(f"No data available for {date_range}")
-    else:
-        Q = np.median(historic_df[comid])
+    # if lat and lon is not None:
+    #     try:
+    #         date_range = get_dem_dates(lat, lon)
+    #         subset_df = historic_df.loc[date_range[0]:date_range[1]]
+    #         Q = np.median(subset_df[comid])
+    #     except IndexError:
+    #         date_range = get_dem_dates(lat, lon)
+    #         raise ValueError(f"No data available for {date_range}")
+    # else:
+    #     Q = np.median(historic_df[comid])
 
-    return Q
+    return date # Q
 
 
 def dam_height(Q, b, delta_wse, y_t, delta_z=0):
@@ -197,16 +163,22 @@ class CrossSection:
         # geospatial info
         self.lat = xs_row['Lat']
         self.lon = xs_row['Lon']
+        self.L = id_row['weir_length'].values[0]
         if index == 4:
             self.location = 'Upstream'
+            # upstream cross-section is 1/8 the weir length from the dam
+            self.distance = int(self.L / 8)
         else:
             self.location = 'Downstream'
+            # downstream cross-sections are one weir length farther than the previous
+            self.distance = int((index + 1) * self.L)
+
         # rating curve info
         self.a = xs_row['depth_a']
         self.b = xs_row['depth_b']
         self.max_Q = xs_row['QMax']
         self.slope = round_sigfig(xs_row['slope'], 3)
-        self.L = id_row['weir_length']
+
         # cross-section plot info
         y_1 = xs_row['elev_1']
         y_1 = y_1[::-1]
@@ -215,16 +187,20 @@ class CrossSection:
         x_1 = [0 + j * xs_row['lat_1'] for j in range(len(y_1))]
         x_2 = [max(x_1) + j * xs_row['lat_2'] for j in range(len(y_2))]
         self.lateral = x_1 + x_2
+
         # water surface info
         self.wse = xs_row['wse_1']
         self.wse_x_1 = x_intercept(x_1, y_1, self.wse)
         self.wse_x_2 = x_intercept(x_2, y_2, self.wse)
-        # fix this later...
-        self.distance = 100
-        self.P = ""
+
+        # initialize P, but don't give it a value yet
+        self.P = None
 
 
     def set_dam_height(self, P):
+        """
+        pretty self-explanatory, no?
+        """
         self.P = P
 
 
@@ -233,11 +209,12 @@ class CrossSection:
         plt.plot(self.lateral, self.elevation,
                  color='black', label=f'Downstream Slope: {self.slope}')
         # wse line
-        plt.plot([self.wse_x_1, self.wse_x_2], [self.wse, self.wse], color='cyan', linestyle='--')
+        plt.plot([self.wse_x_1, self.wse_x_2], [self.wse, self.wse],
+                 color='cyan', linestyle='--', label='Water Surface Elevation')
         plt.xlabel('Lateral Distance (m)')
         plt.ylabel('Elevation (m)')
         plt.title(f'{self.location} Cross-Section {self.distance} meters from LHD No. {self.id}')
-        plt.legend(loc='upper left')
+        plt.legend(loc='upper right')
         plt.show()
 
 
@@ -267,20 +244,17 @@ class CrossSection:
         Y_T = self.a * Q ** self.b
         depth_dict = {"Q": Q, "Y_T": Y_T}
         depth_df = pd.DataFrame(depth_dict)
-        # Ensure self.L is a single value or access the first element if it's a Series
-        if isinstance(self.L, pd.Series):
-            depth_df["L"] = float(self.L.iloc[0])
-        else:
-            depth_df["L"] = float(self.L)
+        depth_df["L"] = self.L
         depth_df["P"] = self.P
 
         # hydraulic calcs
-        depth_df["H"] = ""
+        depth_df["H"] = None
         for index, row in depth_df.iterrows():
             H_guess = 1.0
             P_i = row["P"]
             q_i = row["Q"] / row["L"]
-            H_solution = fsolve(eq_3, H_guess, args=(P_i, q_i))
+            # if this doesn't work, go back to H_guess not in an array
+            H_solution = fsolve(eq_3, np.array([H_guess]), args=(P_i, q_i))
             depth_df.at[index, "H"] = H_solution
 
         depth_df["H+P"] = depth_df["H"] + depth_df["P"]
@@ -290,20 +264,22 @@ class CrossSection:
         depth_df["C_L"] = 0.1 * depth_df["P"] / depth_df["H"]
 
         # ideal jump calcs
-        depth_df["Y_1/H"] = ""
+        depth_df["Y_1/H"] = None
+        index: Hashable
         for index, row in depth_df.iterrows():
             a = 1
             b = -(1 + row["P"] / row["H"])
             c = 0
-            d = (4 / 9) * row["C_W"] * (1 + row["C_L"])
+            d = (4 / 9) * row["C_W"]**2 * (1 + row["C_L"])
             coeffs = [a, b, c, d]
             roots = np.roots(coeffs)
 
             positive_real_roots = [r.real for r in roots if np.isreal(r) and r.real > 0]
-            try:
-                depth_df.at[index, "Y_1/H"] = min(positive_real_roots)
-            except ValueError: # if there are no real roots, use the last real value we found... only happens on one
-                depth_df.at[index, "Y_1/H"] = depth_df.at[index-1, "Y_1/H"]
+            depth_df.at[index, "Y_1/H"] = min(positive_real_roots)
+            # try:
+            #     depth_df.at[index, "Y_1/H"] = min(positive_real_roots)
+            # except ValueError: # if there are no real roots, use the last real value we found... only happens on one
+            #     depth_df.at[index, "Y_1/H"] = depth_df.at[(index-1), "Y_1/H"]
 
         depth_df["Y_1"] = depth_df["Y_1/H"] * depth_df["H"]
         depth_df["V_1"] = depth_df["Q"] / depth_df["L"] / depth_df["Y_1"]
@@ -346,8 +322,12 @@ class CrossSection:
 
 
     def plot_fatal_flow(self):
-        plt.plot()
-        return
+        fatal_cfs = np.array([1270, 3400, 4550, 5150, 6220, 6280])
+        fatal_cms = fatal_cfs / 35.315
+        fatal_m = self.a * fatal_cms**self.b
+        plt.scatter(fatal_cfs, fatal_m * 3.281,
+                 label="Recorded Fatality", marker='o',
+                 facecolors='none', edgecolors='black')
 
 
 class Dam:
@@ -377,37 +357,42 @@ class Dam:
         # physical information
         self.cross_sections = []
         self.weir_length = id_row['weir_length'].values[0]
-
-        # self.top_width = 0
         self.height = 0
-        self.h_overtop = []
+
         # find attributes based on the vdt and xs files
         vdt_loc = f'{project_dir}/LHD_Results/{self.id}/VDT/{self.id}_Local_CurveFile.dbf'
         xs_loc = f'{project_dir}/LHD_Results/{self.id}/XS/{self.id}_XS_Out.txt'
+
+        # save tif and shp files for later...
+        self.shp_loc = f'{project_dir}/LHD_Results/{self.id}/VDT/{self.id}_Local_CurveFile.shp'
+        self.tif_loc = f'{project_dir}/LHD_Results/{self.id}/Bathymetry/{self.id}_ARC_Bathy.tif'
+
         # read in dbf then translate it to data.frame
         vdt_dbf = dbf.DBF(vdt_loc)
         vdt_df = pd.DataFrame(iter(vdt_dbf))
+
         # read in txt as data.frame
         xs_df = pd.read_csv(xs_loc, header=None, sep='\t')
         xs_df.rename(columns={0: 'COMID', 1: 'Row', 2: 'Col', 3: 'elev_1',
                               4: 'wse_1', 5: 'lat_1', 6: 'n_1', 7: 'elev_2',
                               8: 'wse_2', 9: 'lat_2', 10: 'n_2', 11: 'slope'},
                      inplace=True)
+
         # evaluate the strings as literals (lists)
         xs_df['elev_1'] = xs_df['elev_1'].apply(ast.literal_eval)
         xs_df['n_1'] = xs_df['n_1'].apply(ast.literal_eval)
         xs_df['elev_2'] = xs_df['elev_2'].apply(ast.literal_eval)
         xs_df['n_2'] = xs_df['n_2'].apply(ast.literal_eval)
+
         # let's merge the tables (how='left' because vdt only contains the xs we want and xs has all of them)
         merged_df = pd.merge(vdt_df, xs_df, on=['COMID', 'Row', 'Col'], how='left')
-        self.max_Q = max(merged_df['QMax'].values)
-        # let's go through each row of the df and add cross-sections to the dam.
+
+        # let's go through each row of the df and create cross-sections objects
         for index, row in merged_df.iterrows():
             self.cross_sections.append(CrossSection(index, row, id_row))
 
-        # # hydrologic information
+        # hydrologic information
         self.known_baseflow = id_row['known_baseflow'].values[0]
-        # fatality flow will be added soon...
 
         # let's add the dam height and slope to the csv
         for i in range(len(self.cross_sections)-1):
@@ -416,10 +401,12 @@ class Dam:
             y_i = self.cross_sections[i].a * Q_i**self.cross_sections[i].b
             delta_wse_i = self.cross_sections[-1].wse - self.cross_sections[i].wse
 
-            # energy_up = self.cross_sections[-1].wse - min(self.cross_sections[i].elevation)
+            # estimate dam height, add to cross-section and csv file
             P_i = dam_height(Q_i, L_i, delta_wse_i, y_i)
             self.cross_sections[i].set_dam_height(P_i)
             lhd_df.loc[lhd_df['ID'] == self.id, f'P_{i + 1}'] = P_i * 3.281 # convert to ft
+
+            # add slope info to csv file
             s_i = self.cross_sections[i].slope
             lhd_df.loc[lhd_df['ID'] == self.id, f's_{i + 1}'] = s_i
 
@@ -445,6 +432,97 @@ class Dam:
         for cross_section in self.cross_sections:
             cross_section.plot_cross_section()
 
+
     def plot_all_curves(self):
         for cross_section in self.cross_sections[:-1]:
+            cross_section.plot_fatal_flow()
             cross_section.plot_flip_sequent()
+
+    # noinspection PyTypeChecker
+    def plot_map(self):
+        # Step 1: Open raster and reproject to EPSG:3857
+        with rasterio.open(self.tif_loc) as src:
+            dst_crs = 'EPSG:3857'
+            transform, width, height = calculate_default_transform(
+                src.crs, dst_crs, src.width, src.height, *src.bounds)
+
+            kwargs = src.meta.copy()
+            kwargs.update({
+                'crs': dst_crs,
+                'transform': transform,
+                'width': width,
+                'height': height
+            })
+
+            memfile = MemoryFile()
+            with memfile.open(**kwargs) as dst:
+                for i in range(1, src.count + 1):
+                    reproject(
+                        source=rasterio.band(src, i),
+                        destination=rasterio.band(dst, i),
+                        src_transform=src.transform,
+                        src_crs=src.crs,
+                        dst_transform=transform,
+                        dst_crs=dst_crs,
+                        resampling=Resampling.nearest)
+            reprojected = memfile.open()
+            raster_data = reprojected.read(1)
+            transform = reprojected.transform
+
+        # Step 2: Load and reproject shapefile
+        gdf = gpd.read_file(self.shp_loc)
+        gdf = gdf.to_crs('EPSG:3857')
+
+        # Step 3: Set zoom bounds
+        """
+        fix this later... lol
+        """
+
+        buffer = 100  # meters
+        minx, miny, maxx, maxy = gdf.total_bounds
+        minx -= buffer * 2
+        miny -= buffer
+        maxx += buffer * 2
+        maxy += buffer
+
+        # Step 4: Plot
+        # Plot setup
+        fig, ax = plt.subplots(figsize=(10, 10))
+
+        # Set plot extent early
+        ax.set_xlim(minx, maxx)
+        ax.set_ylim(miny, maxy)
+
+        # ✅ Step 1: Add basemap (lowest layer)
+        ctx.add_basemap(ax, crs='EPSG:3857', source=ctx.providers.OpenStreetMap.HOT, zorder=0)
+
+        # ✅ Step 2: Plot raster on top of basemap
+        show(raster_data, transform=transform, ax=ax, cmap='plasma', zorder=1, alpha=0.7)
+
+        # ✅ Step 3: Plot shapefile points on top of both
+        gdf.plot(ax=ax, color='red', markersize=25, edgecolor='black', zorder=2)
+
+        # Transformer from raster CRS (e.g., EPSG:3857) to EPSG:4326 (lon/lat)
+        proj = pyproj.Transformer.from_crs("EPSG:3857", "EPSG:4326", always_xy=True)
+
+        # Get current tick positions
+        xticks = ax.get_xticks()
+        yticks = ax.get_yticks()
+
+        # Convert to lon/lat
+        xticks_lon = [proj.transform(x, yticks[0])[0] for x in xticks]
+        yticks_lat = [proj.transform(xticks[0], y)[1] for y in yticks]
+
+        # Set fixed ticks and labels
+        ax.xaxis.set_major_locator(FixedLocator(xticks))
+        ax.set_xticklabels([f"{lon:.4f}" for lon in xticks_lon])
+
+        ax.yaxis.set_major_locator(FixedLocator(yticks))
+        ax.set_yticklabels([f"{lat:.4f}" for lat in yticks_lat])
+
+        ax.set_xlabel("Longitude")
+        ax.set_ylabel("Latitude")
+        plt.title(f"Cross-Section Locations for LHD No. {self.id}")
+        plt.axis('on')
+        plt.tight_layout()
+        plt.show()
