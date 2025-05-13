@@ -15,6 +15,6 @@ for dam in dams:
     dam_i = Dam(int(lhd_id), lhd_csv, project_dir)
 
     # dam_i.plot_rating_curves()
-    dam_i.plot_cross_sections()
-    dam_i.plot_all_curves()
+    # dam_i.plot_cross_sections()
+    # dam_i.plot_all_curves()
     dam_i.plot_map()

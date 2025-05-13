@@ -438,6 +438,7 @@ class Dam:
             cross_section.plot_fatal_flow()
             cross_section.plot_flip_sequent()
 
+
     # noinspection PyTypeChecker
     def plot_map(self):
         # Step 1: Open raster and reproject to EPSG:3857
@@ -493,14 +494,18 @@ class Dam:
         ax.set_xlim(minx, maxx)
         ax.set_ylim(miny, maxy)
 
-        # ✅ Step 1: Add basemap (lowest layer)
+        # Step P-1: Add basemap (lowest layer)
         ctx.add_basemap(ax, crs='EPSG:3857', source=ctx.providers.OpenStreetMap.HOT, zorder=0)
 
-        # ✅ Step 2: Plot raster on top of basemap
+        # Step P-2: Plot raster on top of basemap
         show(raster_data, transform=transform, ax=ax, cmap='plasma', zorder=1, alpha=0.7)
 
-        # ✅ Step 3: Plot shapefile points on top of both
-        gdf.plot(ax=ax, color='red', markersize=25, edgecolor='black', zorder=2)
+        # Step P-3: Plot shapefile points on top of both
+        # separate into upstream and downstream cross-sections
+        gdf_upstream = gdf.iloc[[-1]]
+        gdf_downstream = gdf.iloc[:-1]
+        gdf_upstream.plot(ax=ax, color='green', markersize=100, edgecolor='black', zorder=2, label="Upstream")
+        gdf_downstream.plot(ax=ax, color='dodgerblue', markersize=100, edgecolor='black', zorder=2, label="Downstream")
 
         # Transformer from raster CRS (e.g., EPSG:3857) to EPSG:4326 (lon/lat)
         proj = pyproj.Transformer.from_crs("EPSG:3857", "EPSG:4326", always_xy=True)
@@ -523,6 +528,8 @@ class Dam:
         ax.set_xlabel("Longitude")
         ax.set_ylabel("Latitude")
         plt.title(f"Cross-Section Locations for LHD No. {self.id}")
+        plt.legend(title="Cross-Section Location", title_fontsize="xx-large",
+                   loc='upper right', fontsize='x-large')
         plt.axis('on')
         plt.tight_layout()
         plt.show()
