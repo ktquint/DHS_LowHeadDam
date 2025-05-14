@@ -178,6 +178,7 @@ class CrossSection:
         self.b = xs_row['depth_b']
         self.max_Q = xs_row['QMax']
         self.slope = round_sigfig(xs_row['slope'], 3)
+        self.fatal_qs = np.array(ast.literal_eval(id_row['fatality_flows'].values[0]))
 
         # cross-section plot info
         y_1 = xs_row['elev_1']
@@ -209,8 +210,9 @@ class CrossSection:
         plt.plot(self.lateral, self.elevation,
                  color='black', label=f'Downstream Slope: {self.slope}')
         # wse line
+        wse_int = int(self.wse)
         plt.plot([self.wse_x_1, self.wse_x_2], [self.wse, self.wse],
-                 color='cyan', linestyle='--', label='Water Surface Elevation')
+                 color='cyan', linestyle='--', label=f'Water Surface Elevation: {wse_int}')
         plt.xlabel('Lateral Distance (m)')
         plt.ylabel('Elevation (m)')
         plt.title(f'{self.location} Cross-Section {self.distance} meters from LHD No. {self.id}')
@@ -275,7 +277,10 @@ class CrossSection:
             roots = np.roots(coeffs)
 
             positive_real_roots = [r.real for r in roots if np.isreal(r) and r.real > 0]
-            depth_df.at[index, "Y_1/H"] = min(positive_real_roots)
+            try:
+                depth_df.at[index, "Y_1/H"] = min(positive_real_roots)
+            except ValueError:
+                depth_df.at[index, "Y_1/H"] = 1
             # try:
             #     depth_df.at[index, "Y_1/H"] = min(positive_real_roots)
             # except ValueError: # if there are no real roots, use the last real value we found... only happens on one
@@ -322,10 +327,8 @@ class CrossSection:
 
 
     def plot_fatal_flow(self):
-        fatal_cfs = np.array([1270, 3400, 4550, 5150, 6220, 6280])
-        fatal_cms = fatal_cfs / 35.315
-        fatal_m = self.a * fatal_cms**self.b
-        plt.scatter(fatal_cfs, fatal_m * 3.281,
+        fatal_m = self.a * self.fatal_qs**self.b
+        plt.scatter(self.fatal_qs * 35.315, fatal_m * 3.281,
                  label="Recorded Fatality", marker='o',
                  facecolors='none', edgecolors='black')
 
