@@ -56,7 +56,7 @@ def x_intercept(x_1, y_1, y_2):
 def get_streamflow(comid, date):
     """
     comid needs to be an int
-    date needs to be in the format %Y-%m-%d
+    date needs to be in the format "%Y-%m-%d"
 
     returns average streamflow—for the entire record if no lat-long is given, else it's the average from the dates the lidar was taken
     """
@@ -66,21 +66,39 @@ def get_streamflow(comid, date):
         raise ValueError("comid needs to be an int")
 
     # this is all the data for the comid
-    historic_df = geoglows.data.retro_daily(comid)
-    historic_df.index = pd.to_datetime(historic_df.index)
+    try:
+        historic_df = geoglows.data.retrospective(comid)
+        historic_df.index = pd.to_datetime(historic_df.index)  # Ensure it's a DateTimeIndex
 
-    # if lat and lon is not None:
-    #     try:
-    #         date_range = get_dem_dates(lat, lon)
-    #         subset_df = historic_df.loc[date_range[0]:date_range[1]]
-    #         Q = np.median(subset_df[comid])
-    #     except IndexError:
-    #         date_range = get_dem_dates(lat, lon)
-    #         raise ValueError(f"No data available for {date_range}")
-    # else:
-    #     Q = np.median(historic_df[comid])
+        if '-' in date and len(date) == 10:  # YYYY-MM-DD (corrected)
+            date_dt = pd.to_datetime(date, format='%Y-%m-%d', errors="coerce")
+            if pd.isna(date_dt):  # Check if conversion failed
+                return None
+            filtered_df = historic_df[historic_df.index.strftime('%Y-%m-%d') == date_dt.strftime('%Y-%m-%d')]
 
-    return date # Q
+        elif '-' in date and len(date) == 7:  # MM/YYYY
+            date_dt = pd.to_datetime(date, format='%Y-%m', errors="coerce")
+            if pd.isna(date_dt):
+                return None
+            filtered_df = historic_df[(historic_df.index.year == date_dt.year) & (historic_df.index.month == date_dt.month)]
+
+        elif len(date) == 4 and date.isdigit():  # YYYY
+            date_dt = pd.to_datetime(date, format='%Y', errors="coerce")
+            if pd.isna(date_dt):
+                return None
+            filtered_df = historic_df[historic_df.index.year == date_dt.year]
+
+
+        else:
+            return None
+
+        if not filtered_df.empty:
+            return filtered_df.median().values[0]
+
+    except Exception as e:
+        print(f"Error retrieving streamflow data for COMID {comid} and date {date}: {e}")
+
+    return None
 
 
 def dam_height(Q, b, delta_wse, y_t, delta_z=0):
@@ -178,7 +196,6 @@ class CrossSection:
         self.b = xs_row['depth_b']
         self.max_Q = xs_row['QMax']
         self.slope = round_sigfig(xs_row['slope'], 3)
-        self.fatal_qs = np.array(ast.literal_eval(id_row['fatality_flows'].values[0]))
 
         # cross-section plot info
         y_1 = xs_row['elev_1']
@@ -210,9 +227,8 @@ class CrossSection:
         plt.plot(self.lateral, self.elevation,
                  color='black', label=f'Downstream Slope: {self.slope}')
         # wse line
-        wse_int = int(self.wse)
         plt.plot([self.wse_x_1, self.wse_x_2], [self.wse, self.wse],
-                 color='cyan', linestyle='--', label=f'Water Surface Elevation: {wse_int}')
+                 color='cyan', linestyle='--', label='Water Surface Elevation')
         plt.xlabel('Lateral Distance (m)')
         plt.ylabel('Elevation (m)')
         plt.title(f'{self.location} Cross-Section {self.distance} meters from LHD No. {self.id}')
@@ -277,10 +293,7 @@ class CrossSection:
             roots = np.roots(coeffs)
 
             positive_real_roots = [r.real for r in roots if np.isreal(r) and r.real > 0]
-            try:
-                depth_df.at[index, "Y_1/H"] = min(positive_real_roots)
-            except ValueError:
-                depth_df.at[index, "Y_1/H"] = 1
+            depth_df.at[index, "Y_1/H"] = min(positive_real_roots)
             # try:
             #     depth_df.at[index, "Y_1/H"] = min(positive_real_roots)
             # except ValueError: # if there are no real roots, use the last real value we found... only happens on one
@@ -327,8 +340,10 @@ class CrossSection:
 
 
     def plot_fatal_flow(self):
-        fatal_m = self.a * self.fatal_qs**self.b
-        plt.scatter(self.fatal_qs * 35.315, fatal_m * 3.281,
+        fatal_cfs = np.array([1270, 3400, 4550, 5150, 6220, 6280])
+        fatal_cms = fatal_cfs / 35.315
+        fatal_m = self.a * fatal_cms**self.b
+        plt.scatter(fatal_cfs, fatal_m * 3.281,
                  label="Recorded Fatality", marker='o',
                  facecolors='none', edgecolors='black')
 
