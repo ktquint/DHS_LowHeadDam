@@ -4,11 +4,15 @@ import pandas as pd
 
 def download_gpkg(gpkg_url, local_path):
     """
-    downloads the geoglows gpkgs locally
+    Downloads the GeoGLows GPKGs locally.
     """
-    response = requests.get(gpkg_url)
-    with open(local_path, 'wb') as f:
-        f.write(response.content)
+    try:
+        response = requests.get(gpkg_url)
+        response.raise_for_status()  # Check if the request was successful
+        with open(local_path, 'wb') as f:
+            f.write(response.content)
+    except requests.exceptions.RequestException as e:
+        print(f"Failed to download {gpkg_url}: {e}")
 
 
 def find_col_name(df, value):
@@ -17,30 +21,42 @@ def find_col_name(df, value):
             return col
 
 
-def assign_flowlines(lhd_df, gpkg_dir):
+def assign_flowlines(lhd_df_path, gpkg_dir):
     """
-    this
-    lhd_df: dataframe with lat, long, dem, etc. info
-    gpkg_dir: directory where gpkg will be downloaded
-    """
+        Assigns flowlines to the LHD dataframe and downloads the necessary GPKGs.
+
+        lhd_df_path: Path to the CSV file with lat, long, dem, etc. info.
+        gpkg_dir: Directory where GPKGs will be downloaded.
+        """
+    lhd_df = pd.read_csv(lhd_df_path)
     lhd_df["flowline"] = ""
-    base_url = "https://geoglows-v2.s3-us-west-2.amazonaws.com/streams"
+    base_url = "http://geoglows-v2.s3-website-us-west-2.amazonaws.com/hydrography"
     gpkg_set = set()
-    linkno_df = pd.read_csv("C:/Users/ki87ujmn/PycharmProjects/DHS_LowHeadDam/list_of_linkno.csv")
+    linkno_df = pd.read_csv("../list_of_linkno.csv")
 
     for index, row in lhd_df.iterrows():
-        linkno = row.LINKNO # get the linkno for each dam
+        linkno = row['LINKNO'] # get the linkno for each dam
         gpkg_name = find_col_name(linkno_df, linkno) # find the gpkg with the linkno
-        gpkg_path = f"{gpkg_dir}/{gpkg_name}.gpkg"
-        lhd_df.at[index, 'flowline'] = gpkg_path # save the gpkg path for each dam
-        gpkg_set.add(gpkg_path)
+        if gpkg_name:
+             gpkg_path = f"{gpkg_dir}/{gpkg_name}.gpkg"
+             lhd_df.at[index, 'flowline'] = str(gpkg_path)  # save the gpkg path for each dam
+             gpkg_set.add(gpkg_path)
+        else:
+             print(f"LINKNO {linkno} not found in linkno_df")
 
-    for gpkg_path in gpkg_set: # goes through the unique set of gpkgs and downloads them
-        """
-        esta no funciona :(
-        """
+    # Save updated DataFrame back to CSV
+    lhd_df.to_csv(lhd_df_path, index=False)
 
+    for gpkg_path in gpkg_set:  # goes through the unique set of GPKGs and downloads them
         gpkg_name = gpkg_path.split("/")[-1]
-        gpkg_url = f"{base_url}/{gpkg_name}"
+        vpu_id = gpkg_name[-8:-5]
+        gpkg_url = f"{base_url}/vpu%3D{vpu_id}/{gpkg_name}"
         download_gpkg(gpkg_url, gpkg_path)
+
     return lhd_df
+
+# Example usage
+lhd_df_path = "C:/Users/pgordi/Downloads/LHD_Download_Function_Test_Sheet_CSV.csv"
+gpkg_dir = "C:/Users/pgordi/Downloads"
+assign_flowlines(lhd_df_path, gpkg_dir)
+
