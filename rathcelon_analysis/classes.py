@@ -380,7 +380,37 @@ class Dam:
         self.weir_length = id_row['weir_length'].values[0]
         self.height = 0
 
-        # find attributes based on the vdt and xs files
+        # fatality dates and fatal flows
+        date_string = id_row['Date of Fatality'].iloc[0]
+        dates = date_string.strip("[]").split(", ")
+
+        formatted_dates = []
+
+        for date in dates:
+            try:
+                # Try converting full date (MM/DD/YYYY → YYYY-MM-DD)
+                formatted_date = pd.to_datetime(date.strip(), format="%m/%d/%Y").strftime("%Y-%m-%d")
+            except ValueError:
+                try:
+                    # Try converting partial date (MM/YYYY → YYYY-MM)
+                    formatted_date = pd.to_datetime(date.strip(), format="%m/%Y").strftime("%Y-%m")
+                except ValueError:
+                    # If neither format applies, keep original
+                    formatted_date = date.strip()
+
+            formatted_dates.append(formatted_date)
+
+        self.fatality_dates = formatted_dates
+
+        fatal_flow = []
+        for date in self.fatality_dates:
+            flow_value = get_streamflow(id_row['LINKNO'].iloc[0], date)  # Ensure single value extraction
+            fatal_flow.append(float(flow_value))  # Convert to standard float
+
+        self.fatal_flow = fatal_flow
+
+
+            # find attributes based on the vdt and xs files
         vdt_loc = f'{project_dir}/LHD_Results/{self.id}/VDT/{self.id}_Local_CurveFile.dbf'
         xs_loc = f'{project_dir}/LHD_Results/{self.id}/XS/{self.id}_XS_Out.txt'
 
