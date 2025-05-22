@@ -70,6 +70,7 @@ def get_streamflow(comid, lat=None, lon=None):
     if lat and lon is not None:
         try:
             date_range = get_dem_dates(lat, lon)
+            print(date_range)
             subset_df = historic_df.loc[date_range[0]:date_range[1]]
             Q = np.median(subset_df[comid])
         except IndexError:

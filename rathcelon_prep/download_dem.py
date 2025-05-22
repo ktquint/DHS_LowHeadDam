@@ -24,6 +24,8 @@ def download_dems(lhd_df, dem_dir):
     base_url = "https://tnmaccess.nationalmap.gov/api/v1/products" # all products are found here
     path_list, url_list = [], [] # make unique lists of dem paths and downloadURLs
 
+    print("Starting DEM Download Process...")
+
     for index, row in lhd_df.iterrows():
         lat = row.latitude
         lon = row.longitude
@@ -45,10 +47,10 @@ def download_dems(lhd_df, dem_dir):
                 response.raise_for_status() # not sure what this does
                 results = response.json().get("items", [])
                 if not results:
-                    print(f"No results found for {dataset} data.")
+                    # print(f"No results found for {dataset} data.")
                     continue
                 else:
-                    print(f"Found {len(results)} result for {dataset} data.")
+                    # print(f"Found {len(results)} result for {dataset} data.")
                     break
             except requests.RequestException as e:
                 print(f"Error occurred: {e}")
@@ -70,12 +72,15 @@ def download_dems(lhd_df, dem_dir):
             unique_dems[path] = url
 
     for path, url in unique_dems.items():
-        with requests.get(url, stream=True) as r:
-            r.raise_for_status()
-            with open(path, "wb") as f:
-                for chunk in r.iter_content(chunk_size=8192):
-                    f.write(chunk)
-        print(f"Saved to {path}")
+        if not os.path.exists(path):
+            with requests.get(url, stream=True) as r:
+                r.raise_for_status()
+                with open(path, "wb") as f:
+                    for chunk in r.iter_content(chunk_size=8192):
+                        f.write(chunk)
+            # print(f"Saved to {path}")
+        else:
+            print(f"File already exists at {path}")
     # lhd_df now has a column with the location of the dem associated with each dam
     return lhd_df
 

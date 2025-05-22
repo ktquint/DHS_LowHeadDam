@@ -17,6 +17,6 @@ for dam in dams:
     # lhd_id = dam.split('\\')[-1] # this is for a PC
     dam_i = Dam(int(dam), lhd_csv, project_dir)
     # dam_i.plot_rating_curves()
-    # dam_i.plot_cross_sections()
+    dam_i.plot_cross_sections()
     dam_i.plot_all_curves()
     # dam_i.plot_map()
