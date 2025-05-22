@@ -4,7 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="a629c241-b42d-4445-a676-01ca5d3cdb55" name="Changes" comment="Changed get_streamflow to take a lat lon instead of a date, will add get_dem_dates to get the dates">
+    <list default="true" id="a629c241-b42d-4445-a676-01ca5d3cdb55" name="Changes" comment="Wrote formula for get_streamflow&#10;Formula pulls the data for the comid.&#10;It then determines if the date is %Y-%m-%d, %Y-%m, or %Y and puts the data for the date into a dataframe.&#10;It then finds the median value of that data.">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/rathcelon_analysis/classes.py" beforeDir="false" afterPath="$PROJECT_DIR$/rathcelon_analysis/classes.py" afterDir="false" />
     </list>
@@ -78,6 +78,9 @@
     ]
   }
 }</component>
+  <component name="PyCoverageOptionsProvider">
+    <option name="myUseBundledCoveragePy" value="true" />
+  </component>
   <component name="RunManager" selected="Python.Date_Scratch_File">
     <configuration name="Date_Scratch_File" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
       <module name="DHS_LowHeadDam" />
@@ -235,7 +238,8 @@
       <workItem from="1747167688106" duration="2688000" />
       <workItem from="1747173654323" duration="613000" />
       <workItem from="1747249894198" duration="597000" />
-      <workItem from="1747339783198" duration="4027000" />
+      <workItem from="1747339783198" duration="5316000" />
+      <workItem from="1747843677740" duration="10267000" />
     </task>
     <task id="LOCAL-00001" summary="paige's work">
       <option name="closed" value="true" />
@@ -341,7 +345,15 @@
       <option name="project" value="LOCAL" />
       <updated>1747069365572</updated>
     </task>
-    <option name="localTasksCounter" value="14" />
+    <task id="LOCAL-00014" summary="Wrote formula for get_streamflow&#10;Formula pulls the data for the comid.&#10;It then determines if the date is %Y-%m-%d, %Y-%m, or %Y and puts the data for the date into a dataframe.&#10;It then finds the median value of that data.">
+      <option name="closed" value="true" />
+      <created>1747422530704</created>
+      <option name="number" value="00014" />
+      <option name="presentableId" value="LOCAL-00014" />
+      <option name="project" value="LOCAL" />
+      <updated>1747422530704</updated>
+    </task>
+    <option name="localTasksCounter" value="15" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -381,7 +393,8 @@
     <MESSAGE value="Changes to get start date function" />
     <MESSAGE value="Consolidated Get_Start_Date and get_dem_dates into one function. Added the updated get_dem_dates function into classes.py and added it to the dam class" />
     <MESSAGE value="Changed get_streamflow to take a lat lon instead of a date, will add get_dem_dates to get the dates" />
-    <option name="LAST_COMMIT_MESSAGE" value="Changed get_streamflow to take a lat lon instead of a date, will add get_dem_dates to get the dates" />
+    <MESSAGE value="Wrote formula for get_streamflow&#10;Formula pulls the data for the comid.&#10;It then determines if the date is %Y-%m-%d, %Y-%m, or %Y and puts the data for the date into a dataframe.&#10;It then finds the median value of that data." />
+    <option name="LAST_COMMIT_MESSAGE" value="Wrote formula for get_streamflow&#10;Formula pulls the data for the comid.&#10;It then determines if the date is %Y-%m-%d, %Y-%m, or %Y and puts the data for the date into a dataframe.&#10;It then finds the median value of that data." />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
