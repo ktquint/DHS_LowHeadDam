@@ -196,7 +196,7 @@ class CrossSection:
         self.b = xs_row['depth_b']
         self.max_Q = xs_row['QMax']
         self.slope = round_sigfig(xs_row['slope'], 3)
-        self.fatal_qs = np.array(ast.literal_eval(id_row['fatality_flows'].values[0]))
+        self.fatal_qs = None # np.array(ast.literal_eval(id_row['fatality_flows'].values[0]))
 
         # cross-section plot info
         y_1 = xs_row['elev_1']
@@ -221,6 +221,10 @@ class CrossSection:
         pretty self-explanatory, no?
         """
         self.P = P
+
+
+    def set_fatal_qs(self, q_list):
+        self.fatal_qs = np.array(q_list)
 
 
     def plot_cross_section(self):
@@ -344,7 +348,7 @@ class CrossSection:
         plt.show()
 
 
-    def plot_fatal_flow(self):
+    def plot_fatal_flows(self):
         fatal_m = self.a * self.fatal_qs**self.b
         plt.scatter(self.fatal_qs * 35.315, fatal_m * 3.281,
                  label="Recorded Fatality", marker='o',
@@ -402,13 +406,12 @@ class Dam:
 
         self.fatality_dates = formatted_dates
 
-        fatal_flow = []
+        fatal_flows = []
         for date in self.fatality_dates:
             flow_value = get_streamflow(id_row['LINKNO'].iloc[0], date)  # Ensure single value extraction
-            fatal_flow.append(float(flow_value))  # Convert to standard float
+            fatal_flows.append(float(flow_value))  # Convert to standard float
 
-        self.fatal_flow = fatal_flow
-
+        self.fatal_flows = fatal_flows
 
             # find attributes based on the vdt and xs files
         vdt_loc = f'{project_dir}/LHD_Results/{self.id}/VDT/{self.id}_Local_CurveFile.dbf'
@@ -457,9 +460,15 @@ class Dam:
             self.cross_sections[i].set_dam_height(P_i)
             lhd_df.loc[lhd_df['ID'] == self.id, f'P_{i + 1}'] = P_i * 3.281 # convert to ft
 
+            # add fatal qs to each cross-section
+            self.cross_sections[i].set_fatal_qs(self.fatal_flows)
+
             # add slope info to csv file
             s_i = self.cross_sections[i].slope
             lhd_df.loc[lhd_df['ID'] == self.id, f's_{i + 1}'] = s_i
+
+        lhd_df['fatal flows'] = None
+        lhd_df.loc[lhd_df['ID'] == self.id, 'fatal flows'] = str(self.fatal_flows)
 
         # update the csv file
         lhd_df.to_csv(lhd_csv, index=False)
@@ -486,7 +495,7 @@ class Dam:
 
     def plot_all_curves(self):
         for cross_section in self.cross_sections[:-1]:
-            cross_section.plot_fatal_flow()
+            cross_section.plot_fatal_flows()
             cross_section.plot_flip_sequent()
 
 
