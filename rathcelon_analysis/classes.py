@@ -213,7 +213,10 @@ class CrossSection:
         self.lateral = x_1 + x_2
 
         # water surface info
-        self.wse = xs_row['wse_1']
+        if pd.isna(xs_row['Elev']):
+            self.wse = min(self.elevation)
+        else:
+            self.wse = xs_row['Elev']
         self.wse_x_1 = x_intercept(x_1, y_1, self.wse)
         self.wse_x_2 = x_intercept(x_2, y_2, self.wse)
 
@@ -402,7 +405,7 @@ class Dam:
         for column in slope_est:
             if column not in lhd_df.columns:
                 lhd_df[column] = None
-        id_row = lhd_df[lhd_df['ID'] == self.id]
+        id_row = lhd_df[lhd_df['ID'] == self.id].reset_index(drop=True)
 
         # geographic information
         self.latitude = id_row['latitude'].values[0]
@@ -435,16 +438,46 @@ class Dam:
 
         self.fatality_dates = formatted_dates
 
-        fatal_flows = []
-        for date in self.fatality_dates:
-            flow_value = get_streamflow(id_row['LINKNO'].iloc[0], date)  # Ensure single value extraction
-            # print(flow_value)
-            fatal_flows.append(float(flow_value))  # Convert to standard float
+        # check to see if we already have a fatal flows column
+        if 'fatal_flows' not in lhd_df.columns:
+            lhd_df['fatal_flows'] = None
+            fatal_flows = []
+            for date in self.fatality_dates:
+                flow_value = get_streamflow(id_row['LINKNO'].iloc[0], date)  # Ensure single value extraction
+                # print(flow_value)
+                try:
+                    float_flow = float(flow_value)
+                    fatal_flows.append(float_flow)
+                except (ValueError, TypeError):
+                    continue
+            self.fatal_flows = fatal_flows
+            # if we're getting them for the first time we'll save them to the csv
+            lhd_df.loc[lhd_df['ID'] == self.id, 'fatal_flows'] = str(self.fatal_flows)
 
-        self.fatal_flows = fatal_flows
+        # if there is a fatal_flows' column, we need to check to see if it's already filled out
+        else:
+            # if the row doesn't have fatal flows we'll get them
+            if pd.isna(id_row['fatal_flows'].values[0]):
+                fatal_flows = []
+                for date in self.fatality_dates:
+                    flow_value = get_streamflow(id_row['LINKNO'].iloc[0], date)  # Ensure single value extraction
+                    try:
+                        float_flow = float(flow_value)
+                        fatal_flows.append(float_flow)
+                    except (ValueError, TypeError):
+                        continue
+                self.fatal_flows = fatal_flows
+                # if we're getting them for the first time we'll save them to the csv
+                lhd_df.loc[lhd_df['ID'] == self.id, 'fatal_flows'] = str(self.fatal_flows)
 
-            # find attributes based on the vdt and xs files
-        vdt_loc = os.path.join(results_dir, "VDT", f"{str(self.id)}_Local_CurveFile.dbf")
+            # if the row has flow values we'll save them to our damn object
+            else:
+                self.fatal_flows = ast.literal_eval(id_row.at[0, 'fatal_flows'])
+
+        # find attributes based on the vdt and xs files
+        
+        local_loc = os.path.join(results_dir, "VDT", f"{str(self.id)}_Local_CurveFile.dbf")
+        database_loc = os.path.join(results_dir, "VDT", f"{str(self.id)}_Local_VDT_Database.dbf")
         xs_loc = os.path.join(results_dir, "XS", f"{str(self.id)}_XS_Out.txt" )
 
         # save tif and shp files for later...
@@ -452,8 +485,10 @@ class Dam:
         self.tif_loc = os.path.join(results_dir, "Bathymetry", f"{str(self.id)}_ARC_Bathy.tif")
 
         # read in dbf then translate it to data.frame
-        vdt_dbf = dbf.DBF(vdt_loc)
-        vdt_df = pd.DataFrame(iter(vdt_dbf))
+        local_dbf = dbf.DBF(local_loc)
+        local_df = pd.DataFrame(iter(local_dbf))
+        database_dbf = dbf.DBF(database_loc)
+        database_df = pd.DataFrame(iter(database_dbf))
 
         # read in txt as data.frame
         xs_df = pd.read_csv(xs_loc, header=None, sep='\t')
@@ -469,10 +504,13 @@ class Dam:
         xs_df['n_2'] = xs_df['n_2'].apply(ast.literal_eval)
 
         # let's merge the tables (how='left' because vdt only contains the xs we want and xs has all of them)
-        merged_df = pd.merge(vdt_df, xs_df, on=['COMID', 'Row', 'Col'], how='left')
+        merged_df = pd.merge(local_df, xs_df, on=['COMID', 'Row', 'Col'], how='left')
+        complete_df = pd.merge(merged_df, database_df, on=['COMID', 'Row', 'Col', 'Lat', "Lon"], how='left')
+        print(complete_df.head())
 
         # let's go through each row of the df and create cross-sections objects
-        for index, row in merged_df.iterrows():
+        for index, row in complete_df.iterrows():
+            print(row)
             self.cross_sections.append(CrossSection(index, row, self.id, self.weir_length, self.fig_dir))
 
         # hydrologic information
@@ -482,19 +520,23 @@ class Dam:
         for i in range(len(self.cross_sections)-1):
             Q_i = self.known_baseflow
             L_i = self.weir_length
-            delta_wse_i = self.cross_sections[-1].wse - self.cross_sections[i].wse
+            delta_wse_i = complete_df.iloc[-1]['Elev'] - complete_df.at[i, 'Elev']
+            # delta_wse_i = self.cross_sections[-1].wse - self.cross_sections[i].wse
 
             # tailwater using the power function
             # y_i = self.cross_sections[i].a * Q_i**self.cross_sections[i].b
             # tailwater using the wse and depth
-            y_i = self.cross_sections[i].wse - min(self.cross_sections[i].elevation)
+            y_i = complete_df.at[i, 'Elev'] - min(self.cross_sections[i].elevation)
+            # y_i = self.cross_sections[i].wse - min(self.cross_sections[i].elevation)
+            print(min(self.cross_sections[i].elevation))
 
             # estimate dam height, add to cross-section and csv file
-            z_i = -1 * self.cross_sections[i].slope * self.cross_sections[i].distance
-            P_i = dam_height(Q_i, L_i, delta_wse_i, y_i, z_i)
+            # z_i = -1 * self.cross_sections[i].slope * self.cross_sections[i].distance
+            # P_i = dam_height(Q_i, L_i, delta_wse_i, y_i, z_i)
             # ths one has delta z = 0
-            # P_i = dam_height(Q_i, L_i, delta_wse_i, y_i)
-
+            P_i = dam_height(Q_i, L_i, delta_wse_i, y_i)
+            if P_i < 1 or P_i > 100:
+                P_i = 3.05 # according to the literature, this is one of the most common dam heights
             self.cross_sections[i].set_dam_height(P_i)
             lhd_df.loc[lhd_df['ID'] == self.id, f'P_{i + 1}'] = P_i * 3.281 # convert to ft
 
@@ -505,8 +547,9 @@ class Dam:
             s_i = self.cross_sections[i].slope
             lhd_df.loc[lhd_df['ID'] == self.id, f's_{i + 1}'] = s_i
 
-        lhd_df['fatal flows'] = None
-        lhd_df.loc[lhd_df['ID'] == self.id, 'fatal flows'] = str(self.fatal_flows)
+
+
+
 
         # update the csv file
         lhd_df.to_csv(lhd_csv, index=False)
