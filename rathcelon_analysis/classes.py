@@ -6,23 +6,24 @@ the ID_XS_Out.txt file for each dam
 
 Dam holds the cross-section information
 """
+#
+###
+#####
+#######
 import os
 import ast
 import math
-
+import pyproj
+import rasterio
 import geoglows
 import numpy as np
 import pandas as pd
 import dbfread as dbf
-from typing import Hashable
-import matplotlib.pyplot as plt
-from scipy.optimize import fsolve
-
-import pyproj
-import rasterio
 import geopandas as gpd
 import contextily as ctx
 from rasterio.plot import show
+import matplotlib.pyplot as plt
+from scipy.optimize import fsolve
 from rasterio.io import MemoryFile
 from matplotlib.ticker import FixedLocator
 from rasterio.warp import calculate_default_transform, reproject, Resampling
@@ -31,8 +32,31 @@ from rasterio.warp import calculate_default_transform, reproject, Resampling
 g = 9.81 # grav. const.
 
 
-def eq_3(H, P, q):
+def head_eq(H, P, q):
     return (2 / 3) * (0.611 + 0.075 * (H / P)) * np.sqrt(2 * g) * H ** (3/2) - q
+
+
+def Fr_eq(Fr, x):
+    # x = H/P
+    A = (9 / (4 * (0.611 + 0.075 * x)**2)) * 0.5 * Fr**2
+    term1 = A**(1/3) * (1 + 1/x)
+    term2 = 0.5 * Fr**2 * (1 + 0.1/x)
+    return 1 - term1 + term2
+
+
+# noinspection PyTypeChecker
+def compute_flip_and_conjugate(Q, L, P):
+    q = Q / L
+    H = fsolve(head_eq, x0=1.0, args=(P, q))[0] # x0 is initial guess for H
+    y_flip = (H + P) / 1.1
+
+    # on leuthusser's graphs, the x-axis is H/P
+    x = H / P
+    coeffs = [1, -(1 + 1 / x), 0, (4 / 9) * (0.611 + 0.075 * x) ** 2 * (1 + 0.1 / x)]
+    y_1 = min([r.real for r in np.roots(coeffs) if np.isreal(r) and r.real > 0]) * H
+    Fr_1 = fsolve(Fr_eq, x0=100, args=(x,))[0] # x0 is initial guess for Fr_1
+    y_2 = y_1 * 0.5 * (-1 + np.sqrt(1 + 8 * Fr_1 ** 2))
+    return y_flip, y_2
 
 
 def round_sigfig(num, sig_figs):
@@ -122,7 +146,7 @@ def dam_height(Q, b, delta_wse, y_t, delta_z=0):
     A = (2 / 3) * np.sqrt(2 * g)
     D = delta_wse + y_t + delta_z  # total pressure head + elevation
 
-    # Function to solve
+    # solve for q in terms of H
     def func(H):
         if H >= D:  # avoid division by zero or negative P
             return 1e6
@@ -138,33 +162,6 @@ def dam_height(Q, b, delta_wse, y_t, delta_z=0):
     # plug H into eq.1
     P = D - H_sol
     return round(P, 3)
-
-
-def weir_height(Q, b, y_u, tol=0.001):
-    """
-    Q = flow in river (cms)
-    b = bank width (m)
-    y_u = upstream depth (m)
-    """
-    q = Q / b # unit flow
-    # left-hand side
-    A = 3 * q / (2 * np.sqrt(2 * g))
-    # initial weir height estimate
-    p = 0.5 * y_u # we want to start with a positive number < y_u
-    # right-hand side
-    B = 0.611 * (y_u - p)**(3/2) + 0.075 * ((y_u - p)**(5/2))/p
-    counter = 0 # to avoid infinite loop
-    while abs(A - B) > tol:
-        counter += 1
-        if A < B:
-            p += 0.001
-        else:
-            p -= 0.001
-        # recalculate B after adjusting height
-        B = 0.611 * (y_u - p) ** (3 / 2) + 0.075 * ((y_u - p) ** (5 / 2)) / p
-        if counter > 10000:
-            break
-    return round(p, 3)
 
 
 class CrossSection:
@@ -204,19 +201,32 @@ class CrossSection:
         self.fatal_qs = None # np.array(ast.literal_eval(id_row['fatality_flows'].values[0]))
 
         # cross-section plot info
+        self.wse = xs_row['Elev']
+        # i'll make two lists that i'll populate with just the wse values... you'll see why in a minute
+        wse_1 = []
+        wse_2 = []
         y_1 = xs_row['elev_1']
+        for y in y_1:
+            if y <= self.wse:
+                wse_1.append(self.wse)
+        # since these go from the center out, i'll flip them around
         y_1 = y_1[::-1]
+        wse_1 = wse_1[::-1]
         y_2 = xs_row['elev_2']
+        for y in y_2:
+            if y <= self.wse:
+                wse_2.append(self.wse)
         self.elevation = y_1 + y_2
+        self.water_surface = wse_1 + wse_2
         x_1 = [0 + j * xs_row['lat_1'] for j in range(len(y_1))]
         x_2 = [max(x_1) + j * xs_row['lat_2'] for j in range(len(y_2))]
+
+        wse_x_1 = x_1[-len(wse_1)-1:]
+        wse_x_2 = x_2[:len(wse_2)+1]
         self.lateral = x_1 + x_2
+        self.wse_lateral = wse_x_1 + wse_x_2
 
         # water surface info
-        if pd.isna(xs_row['Elev']):
-            self.wse = min(self.elevation)
-        else:
-            self.wse = xs_row['Elev']
         self.wse_x_1 = x_intercept(x_1, y_1, self.wse)
         self.wse_x_2 = x_intercept(x_2, y_2, self.wse)
 
@@ -232,30 +242,38 @@ class CrossSection:
 
 
     def set_fatal_qs(self, q_list):
+        """
+        same explanation as set_dam_height
+        """
         self.fatal_qs = np.array(q_list)
 
 
     def plot_cross_section(self):
+        """
+        creates a figure for each cross-section and saves it in the figs folder within th results folder
+        """
+        fig, ax = plt.subplots()
         # cross-section elevations
-        plt.plot(self.lateral, self.elevation,
+        ax.plot(self.lateral, self.elevation,
                  color='black', label=f'Downstream Slope: {self.slope}')
+
         # wse line
         wse_int = int(self.wse)
-        plt.plot([self.wse_x_1, self.wse_x_2], [self.wse, self.wse],
+        ax.plot([self.wse_x_1, self.wse_x_2], [self.wse, self.wse],
                  color='cyan', linestyle='--', label=f'Water Surface Elevation: {wse_int} m')
-        plt.xlabel('Lateral Distance (m)')
-        plt.ylabel('Elevation (m)')
-        plt.title(f'{self.location} Cross-Section {self.distance} meters from LHD No. {self.id}')
-        plt.legend(loc='upper right')
+        ax.set_xlabel('Lateral Distance (m)')
+        ax.set_ylabel('Elevation (m)')
+        ax.set_title(f'{self.location} Cross-Section {self.distance} meters from LHD No. {self.id}')
+        ax.legend(loc='upper right')
         # the file name stands for Downstream/Upstream Cross-section No. XX at Low-Head Dam No. XX
         if self.index == 4:
             location = 'US'
             fig_loc = os.path.join(self.fig_dir, f"{location}_XS_LHD_{self.id}.png")
         else:
             location = 'DS'
-            fig_loc = os.path.join(self.fig_dir, f"{location}_XS_{self.index}_LHD_{self.id}.png")
-        plt.savefig(fig_loc)
-        plt.show()
+            fig_loc = os.path.join(self.fig_dir, f"{location}_XS_{self.index+1}_LHD_{self.id}.png")
+        fig.savefig(fig_loc)
+        return fig
 
 
     def create_rating_curve(self):
@@ -279,106 +297,59 @@ class CrossSection:
         plt.show()
 
 
-    def plot_flip_sequent(self):
-        Q = np.linspace(1, self.max_Q, 100)
-        Y_T = self.a * Q ** self.b
-        depth_dict = {"Q": Q, "Y_T": Y_T}
-        depth_df = pd.DataFrame(depth_dict)
-        depth_df["L"] = self.L
-        depth_df["P"] = self.P
+    def plot_flip_sequent(self, ax):
+        # set the range of Q's we want to plot
+        Qs = np.linspace(1, self.max_Q, 100)
 
-        # hydraulic calcs
-        depth_df["H"] = None
-        for index, row in depth_df.iterrows():
-            H_guess = 1.0
-            P_i = row["P"]
-            q_i = row["Q"] / row["L"]
-            # if this doesn't work, go back to H_guess not in an array
-            H_solution = fsolve(eq_3, np.array([H_guess]), args=(P_i, q_i))
-            depth_df.at[index, "H"] = H_solution
+        Y_Ts = self.a * Qs ** self.b
+        Y_Flips = []
+        Y_Conjugates = []
 
-        depth_df["H+P"] = depth_df["H"] + depth_df["P"]
-        depth_df["H/(H+P)"] = depth_df["H"] / depth_df["H+P"]
-        depth_df["C_W"] = 0.611 + 0.075 * (depth_df["H"] / depth_df["P"])
-        depth_df["C_D"] = (2/3) * depth_df["C_W"] * np.sqrt(2 *g)
-        depth_df["C_L"] = 0.1 * depth_df["P"] / depth_df["H"]
+        for Q in Qs:
+            Y_Flip, Y_Conj = compute_flip_and_conjugate(Q, self.L, self.P)
+            Y_Flips.append(Y_Flip)
+            Y_Conjugates.append(Y_Conj)
 
-        # ideal jump calcs
-        depth_df["Y_1/H"] = None
-        index: Hashable
-        for index, row in depth_df.iterrows():
-            a = 1
-            b = -(1 + row["P"] / row["H"])
-            c = 0
-            d = (4 / 9) * row["C_W"]**2 * (1 + row["C_L"])
-            coeffs = [a, b, c, d]
-            roots = np.roots(coeffs)
+        Y_Flips = np.array(Y_Flips)
+        Y_Conjugates = np.array(Y_Conjugates)
 
-            positive_real_roots = [r.real for r in roots if np.isreal(r) and r.real > 0]
-            try:
-                depth_df.at[index, "Y_1/H"] = min(positive_real_roots)
-            except ValueError:
-                depth_df.at[index, "Y_1/H"] = 1
-            # try:
-            #     depth_df.at[index, "Y_1/H"] = min(positive_real_roots)
-            # except ValueError: # if there are no real roots, use the last real value we found... only happens on one
-            #     depth_df.at[index, "Y_1/H"] = depth_df.at[(index-1), "Y_1/H"]
-
-        depth_df["Y_1"] = depth_df["Y_1/H"] * depth_df["H"]
-        depth_df["V_1"] = depth_df["Q"] / depth_df["L"] / depth_df["Y_1"]
-        depth_df["F_1"] = depth_df["V_1"] / g ** 0.5 / depth_df["Y_1"] ** 0.5
-        depth_df["Y_2/H"] = depth_df["Y_1/H"] / 2 * (-1 + (1 + 8 * depth_df["F_1"] ** 2) ** 0.5)
-        depth_df["Y_2"] = depth_df["Y_2/H"] * depth_df["H"]
-
-        # depth_df["Y_T"] is already calculated
-        depth_df["S"] = (depth_df["Y_T"] - depth_df["Y_2"]) / depth_df["Y_2"]
-
-        # submerged hydraulic jump
-        depth_df["Y_Flip"] = depth_df["H+P"] / 1.1
-
-        # plot all 3 rating curves
-        # plt.plot(depth_df["Q"], depth_df["Y_Flip"], label="Flip Depth")
-        # plt.plot(depth_df["Q"], depth_df["Y_T"], label="Tailwater Depth")
-        # plt.plot(depth_df["Q"], depth_df["Y_2"], label="Sequent Depth")
-        # american units *eagle screech*
-        plt.plot(depth_df["Q"]*35.315, depth_df["Y_Flip"]*3.281,
+        # american units *eagle screech*... if you don't like it then just get rid of the unit conversions
+        ax.plot(Qs*35.315, Y_Flips*3.281,
                  label="Flip Depth", color='gray', linestyle='--')
-        plt.plot(depth_df["Q"]*35.315, depth_df["Y_T"]*3.281,
+        ax.plot(Qs*35.315, Y_Ts*3.281,
                  label="Tailwater Depth", color='dodgerblue', linestyle='-')
-        plt.plot(depth_df["Q"]*35.315, depth_df["Y_2"]*3.281,
+        ax.plot(Qs*35.315, Y_Conjugates*3.281,
                  label="Sequent Depth", color='gray', linestyle='-')
 
         # make the plot look more presentable
-        plt.grid(True)
-        plt.xlim(left=0)
-        plt.ylim(bottom=0)
+        ax.grid(True)
+        ax.set_xlim(left=0)
+        ax.set_ylim(bottom=0)
 
         # add labels and title then show
-        plt.xlabel('Discharge (ft$^{3}$/s)')
-        plt.ylabel('Depth (ft)')
+        ax.set_xlabel('Discharge (ft$^{3}$/s)')
+        ax.set_ylabel('Depth (ft)')
         # plt.xlabel('Discharge (m$^{3}$/s)')
         # plt.ylabel('Depth (m)')
 
-        plt.title(f'Submerged Hydraulic Jumps at Low-Head Dam No. {self.id}')
-        plt.legend(loc='upper left')
+        ax.set_title(f'Submerged Hydraulic Jumps at Low-Head Dam No. {self.id}')
+        ax.legend(loc='upper left')
 
-
-    def plot_fatal_flows(self):
+    def plot_fatal_flows(self, ax):
         fatal_m = self.a * self.fatal_qs**self.b
-        plt.scatter(self.fatal_qs * 35.315, fatal_m * 3.281,
+        ax.scatter(self.fatal_qs * 35.315, fatal_m * 3.281,
                  label="Recorded Fatality", marker='o',
                  facecolors='none', edgecolors='black')
 
-
+    # noinspection PyTypeChecker
     def create_combined_fig(self):
-        self.plot_flip_sequent()
-        self.plot_fatal_flows()
+        fig, ax = plt.subplots()
+        self.plot_flip_sequent(ax)
+        self.plot_fatal_flows(ax)
         # the file name stands for Rating Curve No. XX at Low-Head Dam No. XX
         fig_loc = os.path.join(self.fig_dir, f"RC_{self.index+1}_LHD_{self.id}.png")
-        plt.savefig(fig_loc)
-        plt.show()
-
-
+        fig.savefig(fig_loc)
+        return fig
 
 
 class Dam:
@@ -386,7 +357,7 @@ class Dam:
     create a Dam based on the BYU LHD IDs
     add cross-sections with information from vdt & cross_section files
     """
-    def __init__(self, lhd_id, lhd_csv, project_dir):
+    def __init__(self, lhd_id, lhd_csv, project_dir, hydrology, est_dam):
         #database information
         self.id = int(lhd_id)
         lhd_df = pd.read_csv(lhd_csv)
@@ -395,17 +366,21 @@ class Dam:
         results_dir = os.path.join(project_dir, "LHD_Results", str(self.id)) # we'll use this a lot later
         self.fig_dir = os.path.join(results_dir, "FIGS")
         os.makedirs(self.fig_dir, exist_ok=True)
-
-        # add height columns before I extract the row
-        P_guesses = ['P_1', 'P_2', 'P_3', 'P_4']
-        slope_est = ['s_1', 's_2', 's_3', 's_4']
-        for column in P_guesses:
-            if column not in lhd_df.columns:
-                lhd_df[column] = None
-        for column in slope_est:
-            if column not in lhd_df.columns:
-                lhd_df[column] = None
         id_row = lhd_df[lhd_df['ID'] == self.id].reset_index(drop=True)
+
+        if est_dam:
+            # if we need to estimate dam height, we'll create guesses for each cross-section
+            P_guesses = ['P_1', 'P_2', 'P_3', 'P_4']
+            slope_est = ['s_1', 's_2', 's_3', 's_4']
+            for column in P_guesses:
+                if column not in lhd_df.columns:
+                    lhd_df[column] = None
+            for column in slope_est:
+                if column not in lhd_df.columns:
+                    lhd_df[column] = None
+            self.P = None
+        else:
+            self.P = id_row['P_known'].values[0] / 3.218
 
         # geographic information
         self.latitude = id_row['latitude'].values[0]
@@ -414,7 +389,7 @@ class Dam:
         # physical information
         self.cross_sections = []
         self.weir_length = id_row['weir_length'].values[0]
-        self.height = 0
+
 
         # fatality dates and fatal flows
         date_string = id_row['Date of Fatality'].iloc[0]
@@ -438,29 +413,14 @@ class Dam:
 
         self.fatality_dates = formatted_dates
 
-        # check to see if we already have a fatal flows column
-        if 'fatal_flows' not in lhd_df.columns:
-            lhd_df['fatal_flows'] = None
-            fatal_flows = []
-            for date in self.fatality_dates:
-                flow_value = get_streamflow(id_row['LINKNO'].iloc[0], date)  # Ensure single value extraction
-                # print(flow_value)
-                try:
-                    float_flow = float(flow_value)
-                    fatal_flows.append(float_flow)
-                except (ValueError, TypeError):
-                    continue
-            self.fatal_flows = fatal_flows
-            # if we're getting them for the first time we'll save them to the csv
-            lhd_df.loc[lhd_df['ID'] == self.id, 'fatal_flows'] = str(self.fatal_flows)
-
-        # if there is a fatal_flows' column, we need to check to see if it's already filled out
-        else:
-            # if the row doesn't have fatal flows we'll get them
-            if pd.isna(id_row['fatal_flows'].values[0]):
+        if hydrology == "GEOGLOWS":
+            # check to see if we already have a fatal flows column
+            if 'fatal_flows' not in lhd_df.columns:
+                lhd_df['fatal_flows'] = None
                 fatal_flows = []
                 for date in self.fatality_dates:
                     flow_value = get_streamflow(id_row['LINKNO'].iloc[0], date)  # Ensure single value extraction
+                    # print(flow_value)
                     try:
                         float_flow = float(flow_value)
                         fatal_flows.append(float_flow)
@@ -469,13 +429,30 @@ class Dam:
                 self.fatal_flows = fatal_flows
                 # if we're getting them for the first time we'll save them to the csv
                 lhd_df.loc[lhd_df['ID'] == self.id, 'fatal_flows'] = str(self.fatal_flows)
-
-            # if the row has flow values we'll save them to our damn object
+            # if there is a fatal_flows' column, we need to check to see if it's already filled out
             else:
-                self.fatal_flows = ast.literal_eval(id_row.at[0, 'fatal_flows'])
+                # if the row doesn't have fatal flows we'll get them
+                if pd.isna(id_row['fatal_flows'].values[0]):
+                    fatal_flows = []
+                    for date in self.fatality_dates:
+                        flow_value = get_streamflow(id_row['LINKNO'].iloc[0], date)  # Ensure single value extraction
+                        try:
+                            float_flow = float(flow_value)
+                            fatal_flows.append(float_flow)
+                        except (ValueError, TypeError):
+                            continue
+                    self.fatal_flows = fatal_flows
+                    # if we're getting them for the first time we'll save them to the csv
+                    lhd_df.loc[lhd_df['ID'] == self.id, 'fatal_flows'] = str(self.fatal_flows)
+
+                # if the row has flow values we'll save them to our damn object
+                else:
+                    self.fatal_flows = ast.literal_eval(id_row.at[0, 'fatal_flows'])
+        else:
+            fatal_flows = id_row['USGS_fatal_flows'].apply(ast.literal_eval).values[0]
+            self.fatal_flows = [Q / 35.315 for Q in fatal_flows]
 
         # find attributes based on the vdt and xs files
-        
         local_loc = os.path.join(results_dir, "VDT", f"{str(self.id)}_Local_CurveFile.dbf")
         database_loc = os.path.join(results_dir, "VDT", f"{str(self.id)}_Local_VDT_Database.dbf")
         xs_loc = os.path.join(results_dir, "XS", f"{str(self.id)}_XS_Out.txt" )
@@ -505,12 +482,13 @@ class Dam:
 
         # let's merge the tables (how='left' because vdt only contains the xs we want and xs has all of them)
         merged_df = pd.merge(local_df, xs_df, on=['COMID', 'Row', 'Col'], how='left')
-        complete_df = pd.merge(merged_df, database_df, on=['COMID', 'Row', 'Col', 'Lat', "Lon"], how='left')
-        print(complete_df.head())
+
+        database_df.drop(['COMID', 'Row', 'Col', 'Lat', 'Lon'], axis=1, inplace=True)
+
+        complete_df = pd.concat([merged_df, database_df], axis=1)
 
         # let's go through each row of the df and create cross-sections objects
         for index, row in complete_df.iterrows():
-            print(row)
             self.cross_sections.append(CrossSection(index, row, self.id, self.weir_length, self.fig_dir))
 
         # hydrologic information
@@ -518,45 +496,71 @@ class Dam:
 
         # let's add the dam height and slope to the csv
         for i in range(len(self.cross_sections)-1):
-            Q_i = self.known_baseflow
-            L_i = self.weir_length
-            delta_wse_i = complete_df.iloc[-1]['Elev'] - complete_df.at[i, 'Elev']
-            # delta_wse_i = self.cross_sections[-1].wse - self.cross_sections[i].wse
-
-            # tailwater using the power function
-            # y_i = self.cross_sections[i].a * Q_i**self.cross_sections[i].b
-            # tailwater using the wse and depth
-            y_i = complete_df.at[i, 'Elev'] - min(self.cross_sections[i].elevation)
-            # y_i = self.cross_sections[i].wse - min(self.cross_sections[i].elevation)
-            print(min(self.cross_sections[i].elevation))
-
-            # estimate dam height, add to cross-section and csv file
-            # z_i = -1 * self.cross_sections[i].slope * self.cross_sections[i].distance
-            # P_i = dam_height(Q_i, L_i, delta_wse_i, y_i, z_i)
-            # ths one has delta z = 0
-            P_i = dam_height(Q_i, L_i, delta_wse_i, y_i)
-            if P_i < 1 or P_i > 100:
-                P_i = 3.05 # according to the literature, this is one of the most common dam heights
-            self.cross_sections[i].set_dam_height(P_i)
-            lhd_df.loc[lhd_df['ID'] == self.id, f'P_{i + 1}'] = P_i * 3.281 # convert to ft
-
             # add fatal qs to each cross-section
             self.cross_sections[i].set_fatal_qs(self.fatal_flows)
-
-            # add slope info to csv file
+            # add slope info to csv file--it's not too important
             s_i = self.cross_sections[i].slope
             lhd_df.loc[lhd_df['ID'] == self.id, f's_{i + 1}'] = s_i
+            y_ts = []
+            y_flips = []
+            y_2s = []
 
+            if est_dam:
+                delta_wse_i = complete_df.iloc[-1]['Elev'] - complete_df.at[i, 'Elev']
+                # delta_wse_i = self.cross_sections[-1].wse - self.cross_sections[i].wse
 
+                # tailwater using the power function
+                # y_i = self.cross_sections[i].a * Q_i**self.cross_sections[i].b
+                # tailwater using the wse and depth
+                y_i = complete_df.at[i, 'Elev'] - min(self.cross_sections[i].elevation)
+                # y_i = self.cross_sections[i].wse - min(self.cross_sections[i].elevation)
 
+                # estimate dam height, add to cross-section and csv file
+                z_i = -1 * self.cross_sections[i].slope * self.cross_sections[i].distance
+                # P_i = dam_height(Q_i, L_i, delta_wse_i, y_i, z_i)
+                # ths one has delta z = 0
+                P_i = dam_height(self.known_baseflow, self.weir_length, delta_wse_i, y_i, z_i)
+                if P_i < 1 or P_i > 100:
+                    P_i = 3.05 # according to the literature, this is one of the most common dam heights
+                self.cross_sections[i].set_dam_height(P_i)
+                lhd_df.loc[lhd_df['ID'] == self.id, f'P_{i + 1}'] = P_i * 3.281 # convert to ft
 
+                # now let's add the tailwater, flip, and conjugate depths for each flow/cross-section combo
+
+                for flow in self.fatal_flows:
+                    # calc. tailwater from power function
+                    y_t = self.cross_sections[i].a * flow**self.cross_sections[i].b
+
+                    # calc conj. and flip using leuthusser eq.s
+                    y_flip, y_2 = compute_flip_and_conjugate(flow, self.weir_length, P_i)
+
+                    # add those depths to their respective lists
+                    y_ts.append(float(y_t))
+                    y_flips.append(float(y_flip))
+                    y_2s.append(float(y_2))
+            else:
+                self.cross_sections[i].set_dam_height(self.P)
+                for flow in self.fatal_flows:
+                    y_t = self.cross_sections[i].a * flow ** self.cross_sections[i].b
+                    y_flip, y_2 = compute_flip_and_conjugate(flow, self.weir_length, self.P)
+                    y_ts.append(float(y_t))
+                    y_flips.append(float(y_flip))
+                    y_2s.append(float(y_2))
+
+            # convert those lists to strings and save them in columns in our data frame
+            y_ts_string = str(y_ts)
+            y_flips_string = str(y_flips)
+            y_2s_string = str(y_2s)
+            lhd_df.loc[lhd_df['ID'] == self.id, f'y_t_{i + 1}'] = y_ts_string
+            lhd_df.loc[lhd_df['ID'] == self.id, f'y_flip_{i + 1}'] = y_flips_string
+            lhd_df.loc[lhd_df['ID'] == self.id, f'y_2_{i + 1}'] = y_2s_string
 
         # update the csv file
         lhd_df.to_csv(lhd_csv, index=False)
 
 
     def set_dam_height(self, P):
-        self.height = P
+        self.P = P
 
 
     def plot_rating_curves(self):
