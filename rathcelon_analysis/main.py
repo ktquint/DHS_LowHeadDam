@@ -68,7 +68,7 @@ def plot_shj_estimates():
     lhd_df = pd.read_csv(database_entry.get())
     # Create new window
     win = tk.Toplevel()
-    win.title("All Cross-Sections")
+    win.title("All Summary Figures")
     win.geometry("1200x600")
 
     # Create a canvas with scrollbar
