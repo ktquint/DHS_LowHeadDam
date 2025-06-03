@@ -66,6 +66,22 @@ def select_results_dir():
 
 def plot_shj_estimates():
     lhd_df = pd.read_csv(database_entry.get())
+    # Create new window
+    win = tk.Toplevel()
+    win.title("All Cross-Sections")
+    win.geometry("1200x600")
+
+    # Create a canvas with scrollbar
+    canvas = tk.Canvas(win)
+    scrollbar = ttk.Scrollbar(win, orient="vertical", command=canvas.yview)
+    scroll_frame = ttk.Frame(canvas)
+
+    scroll_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+    canvas.create_window((0, 0), window=scroll_frame, anchor="nw")
+    canvas.configure(yscrollcommand=scrollbar.set)
+
+    canvas.pack(side="left", fill="both", expand=True)
+    scrollbar.pack(side="right", fill="y")
 
     for i in range(1, 5):
         y_t_strs = lhd_df[f'y_t_{i}'].to_list()
@@ -103,7 +119,7 @@ def plot_shj_estimates():
         x_labels = slope.round(6).astype(str)
 
         # Create a Matplotlib figure and embed it
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(figsize=(11, 5))
         cap_width = 0.2
 
         for x, y, y2, y_flip in zip(x_vals, tailwater, conjugate, flip):
@@ -140,17 +156,76 @@ def plot_shj_estimates():
         ax.set_xlabel('Slope')
         ax.set_ylabel('Depth (ft)')
         ax.grid(True, axis='y', linestyle='--', alpha=0.5)
+        ax.set_title(f"Summary of Results from Cross-Section No. {i}")
         fig.tight_layout()
 
-        plot_window = tk.Toplevel(root)
-        plot_window.title(f"Summary of Results for Cross-Section No. {i}")
-        plot_window.geometry("1200x600")
+        fig_canvas = FigureCanvasTkAgg(fig, master=scroll_frame)
+        fig_canvas.draw()
+        fig_canvas.get_tk_widget().pack(padx=10, pady=10, fill="both", expand=True)
 
-        # Embed the figure in the Tkinter window
-        canvas = FigureCanvasTkAgg(fig, master=plot_window)
-        canvas.draw()
-        canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
+def plot_cross_section(dam):
+    # Create new window
+    win = tk.Toplevel()
+    win.title("All Cross-Sections")
+    win.geometry("800x800")
+
+    # Create a canvas with scrollbar
+    canvas = tk.Canvas(win)
+    scrollbar = ttk.Scrollbar(win, orient="vertical", command=canvas.yview)
+    scroll_frame = ttk.Frame(canvas)
+
+    scroll_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+    canvas.create_window((0, 0), window=scroll_frame, anchor="nw")
+    canvas.configure(yscrollcommand=scrollbar.set)
+
+    canvas.pack(side="left", fill="both", expand=True)
+    scrollbar.pack(side="right", fill="y")
+
+    # Generate and add figures
+    for cross_section in dam.cross_sections:
+        xs_fig = cross_section.plot_cross_section()
+        fig_canvas = FigureCanvasTkAgg(xs_fig, master=scroll_frame)
+        fig_canvas.draw()
+        fig_canvas.get_tk_widget().pack(padx=10, pady=10, fill="both", expand=True)
+
+
+def plot_rating_curves(dam):
+    # Create new window
+    win = tk.Toplevel()
+    win.title("All Rating Curves")
+    win.geometry("800x800")
+
+    # Create a canvas with scrollbar
+    canvas = tk.Canvas(win)
+    scrollbar = ttk.Scrollbar(win, orient="vertical", command=canvas.yview)
+    scroll_frame = ttk.Frame(canvas)
+
+    scroll_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+    canvas.create_window((0, 0), window=scroll_frame, anchor="nw")
+    canvas.configure(yscrollcommand=scrollbar.set)
+
+    canvas.pack(side="left", fill="both", expand=True)
+    scrollbar.pack(side="right", fill="y")
+
+    # Generate and add figures
+    for cross_section in dam.cross_sections[:-1]:
+        rc_fig = cross_section.create_combined_fig()
+        fig_canvas = FigureCanvasTkAgg(rc_fig, master=scroll_frame)
+        fig_canvas.draw()
+        fig_canvas.get_tk_widget().pack(padx=10, pady=10, fill="both", expand=True)
+
+def plot_map(dam):
+    map_fig = dam.plot_map()
+    # Create a new Tkinter window for the plot
+    plot_window = tk.Toplevel(root)
+    plot_window.title("Rating Curves")
+    plot_window.geometry("1200x1000")
+
+    # Embed the figure in the Tkinter window
+    canvas = FigureCanvasTkAgg(map_fig, master=plot_window)
+    canvas.draw()
+    canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
 # Your custom function using the folder path from the entry
 def process_ARC():
@@ -161,7 +236,6 @@ def process_ARC():
 
     selected_model = model_var.get() # str with hydrologic data source
     estimate_dam = estimate_dam_height_var.get() # boolean
-    print("Hydrologic Data Source:", selected_model)
 
     # get the numbers of all folders in results folder
 
@@ -177,44 +251,19 @@ def process_ARC():
             # dam_i.plot_map()
 
             if display_cross_section.get():
-                for cross_section in dam_i.cross_sections:
-                    xs_fig = cross_section.plot_cross_section()
-                    # Create a new Tkinter window for the plot
-                    plot_window = tk.Toplevel(root)
-                    plot_window.title("Cross-Section Plot")
-                    plot_window.geometry("600x400")
-
-                    # Embed the figure in the Tkinter window
-                    canvas = FigureCanvasTkAgg(xs_fig, master=plot_window)
-                    canvas.draw()
-                    canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+                plot_cross_section(dam_i)
+            if display_rating_curves.get():
+                plot_rating_curves(dam_i)
+            if display_map.get():
+                plot_map(dam_i)
     else:
         dam_i = Dam(int(dropdown.get()), database_csv, project_dir, selected_model, estimate_dam)
-
         if display_cross_section.get():
-            for cross_section in dam_i.cross_sections:
-                xs_fig = cross_section.plot_cross_section()
-                # Create a new Tkinter window for the plot
-                plot_window = tk.Toplevel(root)
-                plot_window.title("Cross-Section Plot")
-                plot_window.geometry("600x400")
-
-                # Embed the figure in the Tkinter window
-                canvas = FigureCanvasTkAgg(xs_fig, master=plot_window)
-                canvas.draw()
-                canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+            plot_cross_section(dam_i)
         if display_rating_curves.get():
-            for cross_section in dam_i.cross_sections[:-1]:
-                rc_fig = cross_section.create_combined_fig()
-                # Create a new Tkinter window for the plot
-                plot_window = tk.Toplevel(root)
-                plot_window.title("Rating Curves")
-                plot_window.geometry("600x400")
-
-                # Embed the figure in the Tkinter window
-                canvas = FigureCanvasTkAgg(rc_fig, master=plot_window)
-                canvas.draw()
-                canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+            plot_rating_curves(dam_i)
+        if display_map.get():
+            plot_map(dam_i)
 
 
 # GUI setup
@@ -288,19 +337,25 @@ dropdown = ttk.Combobox(root, state="readonly")
 dropdown.pack(pady=5)
 
 # --- Display Graphs Label and Checkboxes ---
-section_label = tk.Label(root, text="Select Graphs to Display:", font=("Arial", 10))
+section_label = tk.Label(root, text="Select Figures to Display:", font=("Arial", 10))
 section_label.pack(pady=(15, 0))
 
 # cross-section checkbox
 display_cross_section = tk.BooleanVar()
 display_cross_section.set(True)# default checked
-display_checkbox = ttk.Checkbutton(root, text="Cross-Section Graphs", variable=display_cross_section)
+display_checkbox = ttk.Checkbutton(root, text="Cross-Sections", variable=display_cross_section)
 display_checkbox.pack(pady=(5, 10))
 
 # rating curves checkbox
 display_rating_curves = tk.BooleanVar()
 display_rating_curves.set(True)# default checked
-display_checkbox = ttk.Checkbutton(root, text="Rating Curve Graphs", variable=display_rating_curves)
+display_checkbox = ttk.Checkbutton(root, text="Rating Curves", variable=display_rating_curves)
+display_checkbox.pack(pady=(5, 10))
+
+# map checkbox
+display_map = tk.BooleanVar()
+display_map.set(True)# default checked
+display_checkbox = ttk.Checkbutton(root, text="Dam Location", variable=display_map)
 display_checkbox.pack(pady=(5, 10))
 
 # --- Run function button ---

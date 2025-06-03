@@ -669,9 +669,9 @@ class Dam:
 
         ax.set_xlabel("Longitude")
         ax.set_ylabel("Latitude")
-        plt.title(f"Cross-Section Locations for LHD No. {self.id}")
-        plt.legend(title="Cross-Section Location", title_fontsize="xx-large",
+        ax.set_title(f"Cross-Section Locations for LHD No. {self.id}")
+        ax.legend(title="Cross-Section Location", title_fontsize="xx-large",
                    loc='upper right', fontsize='x-large')
-        plt.axis('on')
-        plt.tight_layout()
-        plt.show()
+        ax.set_axis_on()
+        fig.tight_layout()
+        return fig
