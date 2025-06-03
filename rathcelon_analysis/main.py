@@ -78,17 +78,22 @@ def plot_shj_estimates():
         y_2_list = [num for item in y_2_strs for num in ast.literal_eval(item)]
 
         slopes = lhd_df[f's_{i}'].to_list()
+        dam_ids = lhd_df['ID'].tolist()
+
         nested_list = [ast.literal_eval(item) for item in y_t_strs]
         expanded_slopes = [val for val, group in zip(slopes, nested_list) for _ in range(len(group))]
+        expanded_ids = [val for val, group in zip(dam_ids, nested_list) for _ in range(len(group))]
+
 
         df = pd.DataFrame({
             'slope': expanded_slopes,
             'y_t': y_t_list,
             'y_flip': y_flip_list,
-            'y_2': y_2_list
+            'y_2': y_2_list,
+            'dam_id': expanded_ids
         })
 
-        df = df.sort_values('slope').reset_index(drop=True)
+        df = df.sort_values(['dam_id', 'slope']).reset_index(drop=True)
         x_vals = np.arange(len(df))
 
         slope = df['slope']
@@ -113,6 +118,22 @@ def plot_shj_estimates():
             ax.hlines(y2, x - cap_width, x + cap_width, color='black', linewidth=1)
             ax.hlines(y_flip, x - cap_width, x + cap_width, color='black', linewidth=1)
             ax.scatter(x, y, color=c, marker='x', zorder=3)
+
+        current_id = None
+        start_idx = 0
+        shade = True  # start with shading
+
+        for idx, dam in enumerate(df['dam_id']):
+            if dam != current_id:
+                if current_id is not None and shade:
+                    ax.axvspan(start_idx - 0.5, idx - 0.5, color='gray', alpha=0.1)
+                current_id = dam
+                start_idx = idx
+                shade = not shade
+
+        # Handle the final dam
+        if shade:
+            ax.axvspan(start_idx - 0.5, len(df) - 0.5, color='gray', alpha=0.1)
 
         ax.set_xticks(x_vals)
         ax.set_xticklabels(x_labels, rotation=90)
