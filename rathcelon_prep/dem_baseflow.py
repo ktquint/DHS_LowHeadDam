@@ -23,7 +23,7 @@ def get_dem_dates(lat, lon):
     }
 
     response = requests.get(base_url, params=params)
-    # print(response.text)
+    print(response.text)
     lidar_info = response.json().get("items", [])
 
     if not lidar_info:
@@ -81,16 +81,19 @@ def get_streamflow(comid, lat=None, lon=None):
 
     return Q
 
-def add_known_baseflow(lhd_df):
-    lhd_df['known_baseflow'] = ""
-    for index, row in lhd_df.iterrows():
-        linkno = row.LINKNO
-        lat = row.latitude
-        lon = row.longitude
-        dem_streamflow = get_streamflow(linkno, lat, lon)
-        lhd_df.at[index, "known_baseflow"] = dem_streamflow
-        print(f'index: {index}')
-        print(f'known baseflow: {dem_streamflow}')
+def add_known_baseflow(lhd_df, hydrology):
+    lhd_df['known_baseflow'] = None
+    if hydrology == "GEOGLOWS":
+        for index, row in lhd_df.iterrows():
+            linkno = row.LINKNO
+            lat = row.latitude
+            lon = row.longitude
+            dem_streamflow = get_streamflow(linkno, lat, lon)
+            lhd_df.at[index, "known_baseflow"] = dem_streamflow
+            print(f'index: {index}')
+            print(f'known baseflow: {dem_streamflow}')
+    else:
+        print("NWM is not ready... lol")
     return lhd_df
 
 

@@ -46,6 +46,7 @@ def Fr_eq(Fr, x):
 
 # noinspection PyTypeChecker
 def compute_flip_and_conjugate(Q, L, P):
+    print(Q, L, P)
     q = Q / L
     H = fsolve(head_eq, x0=1.0, args=(P, q))[0] # x0 is initial guess for H
     y_flip = (H + P) / 1.1

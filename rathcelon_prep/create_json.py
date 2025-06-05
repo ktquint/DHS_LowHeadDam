@@ -33,11 +33,10 @@ def rathcelon_input (lhd_csv, output_loc):
     input_data = {
         "dams" : dams
     }
-    file_name = output_loc + "/input.json"
-    with open(file_name, 'w') as json_file:
+    with open(output_loc, 'w') as json_file:
+        # noinspection PyTypeChecker
         json.dump(input_data, json_file, indent=4)
     # this will tell us where we saved the input file
-    return file_name
 
 """
 test case
