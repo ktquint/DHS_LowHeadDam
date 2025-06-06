@@ -1,9 +1,20 @@
 import os
+import re
 import math
 import requests
 import rasterio
-import pandas as pd
+from datetime import datetime
 from rasterio.merge import merge
+from rasterio.io import MemoryFile
+from rasterio.warp import calculate_default_transform, reproject, Resampling
+
+
+def extract_date(item):
+    return item.get("dateCreated") or item.get("publishedDate") or ""
+
+def extract_tile_id(title):
+    match = re.search(r'x\d+y\d+', title)
+    return match.group(0) if match else None
 
 def sanitize_filename(filename):
     """
@@ -26,35 +37,71 @@ def meters_to_latlon(lat0, lon0, dx, dy):
 
 
 def merge_dems(dem_files, output_filename):
-    """
-        merges a list of DEMs into one and deletes the originals.
-        assuming all DEMs are in the same folder.
-    """
     dem_dir = os.path.dirname(dem_files[0])
     output_loc = os.path.join(dem_dir, output_filename)
 
-    # open all DEMs and merge those bad boys
-    src_files_to_mosaic = [rasterio.open(fp) for fp in dem_files]
-    mosaic, out_transform = merge(src_files_to_mosaic)
+    mosaic_inputs = []
+    memfiles = []
+    target_crs = None
 
-    # copy metadata from first DEM to the merged one
-    out_meta = src_files_to_mosaic[0].meta.copy()
+    for fp in dem_files:
+        src = rasterio.open(fp)
+        if target_crs is None:
+            target_crs = src.crs
+
+        if src.crs != target_crs:
+            transform, width, height = calculate_default_transform(
+                src.crs, target_crs, src.width, src.height, *src.bounds)
+
+            kwargs = src.meta.copy()
+            kwargs.update({
+                'crs': target_crs,
+                'transform': transform,
+                'width': width,
+                'height': height
+            })
+
+            memfile = MemoryFile()
+            memfiles.append(memfile)  # Keep reference alive
+            dst = memfile.open(**kwargs)
+
+            for i in range(1, src.count + 1):
+                reproject(
+                    source=rasterio.band(src, i),
+                    destination=rasterio.band(dst, i),
+                    src_transform=src.transform,
+                    src_crs=src.crs,
+                    dst_transform=transform,
+                    dst_crs=target_crs,
+                    resampling=Resampling.nearest)
+
+            dst.close()
+            dst = memfile.open()
+            mosaic_inputs.append(dst)
+        else:
+            mosaic_inputs.append(src)
+
+    mosaic, out_transform = merge(mosaic_inputs)
+
+    out_meta = mosaic_inputs[0].meta.copy()
     out_meta.update({
         "driver": "GTiff",
         "height": mosaic.shape[1],
         "width": mosaic.shape[2],
-        "transform": out_transform
+        "transform": out_transform,
+        "crs": target_crs
     })
 
-    # save new DEM
     with rasterio.open(output_loc, "w", **out_meta) as dest:
         dest.write(mosaic)
 
-    # close all opened files
-    for src in src_files_to_mosaic:
+    # Clean up
+    for src in mosaic_inputs:
         src.close()
+    for memfile in memfiles:
+        memfile.close()
 
-    # confirmed new merged file exists and then scrap the old ones
+    # Delete original files
     if os.path.exists(output_loc):
         for fp in dem_files:
             try:
@@ -89,8 +136,14 @@ def download_dems(lhd_df, dem_dir, resolution):
         datasets = all_datasets[2:]
 
     for index, row in lhd_df.iterrows():
-        if "dem_dir" not in lhd_df.columns or pd.isna(lhd_df.at[index, "dem_dir"]):
-            lhd_id = row['ID']
+        # let's check to see if this dam already has a DEM...
+        lhd_id = row['ID']
+        dem_subdir = os.path.join(dem_dir, f"{lhd_id}_DEM")
+        os.makedirs(dem_subdir, exist_ok=True)  # if the directory already exists, it won't freak out
+        dem_path = os.path.join(dem_subdir, f"{lhd_id}_MERGED_DEM.tif")
+
+        if not os.path.isfile(dem_path):
+
             lat = row['latitude']
             lon = row['longitude']
             bounding_dist = 2 * row.weir_length
@@ -98,7 +151,6 @@ def download_dems(lhd_df, dem_dir, resolution):
             lower_lat, lower_lon = meters_to_latlon(lat, lon, -1 * bounding_dist, -1 * bounding_dist)
 
             bbox = (lower_lon, lower_lat, upper_lon, upper_lat)
-            # print(f"latitude = {lat}, longitude = {lon}")
 
             results = []
             for dataset in datasets:
@@ -111,27 +163,51 @@ def download_dems(lhd_df, dem_dir, resolution):
                 try:
                     response = requests.get(base_url, params=params)
                     response.raise_for_status() # not sure what this does
+
                     results = response.json().get("items", [])
+
+                    # Filter to get only the most recent DEM per tile
+                    filtered = []
+                    for item in results:
+                        title = item.get("title", "")
+                        if extract_tile_id(title) and extract_date(item):
+                            filtered.append(item)
+
+                    # Build dict of most recent item per tile
+                    tile_to_item = {}
+                    for item in filtered:
+                        title = item.get("title", "")
+                        tile_id = extract_tile_id(title)
+                        date_str = extract_date(item)
+                        try:
+                            date_obj = datetime.fromisoformat(date_str)
+                        except ValueError:
+                            continue  # skip if date format is wrong
+
+                        if tile_id not in tile_to_item or date_obj > tile_to_item[tile_id][0]:
+                            tile_to_item[tile_id] = (date_obj, item)
+
+                    # Extract only the most recent item per tile
+                    results = [entry[1] for entry in tile_to_item.values()]
+
+                    # this logic prevents exits the loop once it downloads a DEM
                     if not results:
                         # print(f"No results found for {dataset} data.")
                         continue
                     else:
                         # print(f"Found {len(results)} result for {dataset} data.")
                         break
+
                 except requests.RequestException as e:
                     print(f"Error occurred: {e}")
             if not results: # if there's no results for any (highly unlikely), it will skip over the dam and keep going
                 continue
 
-            dem_subdir = os.path.join(dem_dir, f"{lhd_id}_DEM")
-            os.makedirs(dem_subdir, exist_ok=True) # if the directory already exists, it won't freak out
-            dem_path = os.path.join(dem_subdir, f"{lhd_id}_MERGED_DEM.tif")
-            lhd_df.at[index, "dem_dir"] = dem_subdir # save the path to the specific dem folder to the DataFrame
             titles = [sanitize_filename(dem.get("title", "")) for dem in results]
             download_urls = [dem.get("downloadURL") for dem in results]
 
             if len(results) > 1:
-                temp_paths = [os.path.join(dem_subdir, title, ".tif") for title in titles]
+                temp_paths = [os.path.join(dem_subdir, f"{title}.tif") for title in titles]
                 for i in range(len(results)):
                     url = download_urls[i]
                     path = temp_paths[i]
@@ -147,6 +223,7 @@ def download_dems(lhd_df, dem_dir, resolution):
                     with open(dem_path, "wb") as f:
                         for chunk in r.iter_content(chunk_size=8192):
                             f.write(chunk)
+        lhd_df.at[index, "dem_dir"] = dem_subdir
     # lhd_df now has a column with the location of the dem associated with each dam
     return lhd_df
 
