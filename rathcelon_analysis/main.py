@@ -34,17 +34,11 @@ def select_project_dir():
 def update_dropdown():
     results_dir = results_entry.get()
     if os.path.isdir(results_dir):
-        try:
-            # files = [f for f in os.listdir(folder) if f.endswith(".txt")]  # customize filter
-            dams = sorted([int(d) for d in os.listdir(results_dir)])
-            dams.insert(0, "All Dams")
-            dropdown['values'] = dams
-            if dams:
-                dropdown.set(dams[0])  # select first item
-            else:
-                dropdown.set("No .txt files")
-        except Exception:
-            dropdown.set("Error reading folder")
+        dams = sorted([int(d) for d in os.listdir(results_dir) if d != '.DS_Store'])
+        dams.insert(0, "All Dams")
+        dropdown['values'] = dams
+        if dams:
+            dropdown.set(dams[0])  # select first item
     else:
         dropdown.set("Invalid path")
 
@@ -62,6 +56,7 @@ def select_results_dir():
     if results_path:
         results_entry.delete(0, tk.END)
         results_entry.insert(0, results_path)
+        update_dropdown()
 
 
 def plot_shj_estimates():
@@ -240,7 +235,7 @@ def process_ARC():
     # get the numbers of all folders in results folder
 
     if dropdown.get() == "All Dams":
-        dam_ints = sorted([int(d) for d in os.listdir(results_dir)])
+        dam_ints = sorted([int(d) for d in os.listdir(results_dir) if d != '.DS_Store'])
         for dam_id in dam_ints:
             print(f"Analyzing Dam No. {dam_id}")
             dam_i = Dam(int(dam_id), database_csv, project_dir, selected_model, estimate_dam)
