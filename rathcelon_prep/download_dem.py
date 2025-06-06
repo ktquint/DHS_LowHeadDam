@@ -76,7 +76,6 @@ def download_dems(lhd_df, dem_dir, resolution):
         resolution: preferred resolution of the DEM
     """
     base_url = "https://tnmaccess.nationalmap.gov/api/v1/products" # all products are found here
-    path_list, url_list = [], [] # make unique lists of dem paths and downloadURLs
 
     print("Starting DEM Download Process...")
     all_datasets = ["Digital Elevation Model (DEM) 1 meter",
@@ -91,6 +90,7 @@ def download_dems(lhd_df, dem_dir, resolution):
 
     for index, row in lhd_df.iterrows():
         if "dem_dir" not in lhd_df.columns or pd.isna(lhd_df.at[index, "dem_dir"]):
+            lhd_id = row['ID']
             lat = row['latitude']
             lon = row['longitude']
             bounding_dist = 2 * row.weir_length
@@ -122,41 +122,31 @@ def download_dems(lhd_df, dem_dir, resolution):
                     print(f"Error occurred: {e}")
             if not results: # if there's no results for any (highly unlikely), it will skip over the dam and keep going
                 continue
-            dem = results[0]
-            title = sanitize_filename(dem.get("title"))
-            dem_subdir =   f"{dem_dir}/{title}"
+
+            dem_subdir = os.path.join(dem_dir, f"{lhd_id}_DEM")
             os.makedirs(dem_subdir, exist_ok=True) # if the directory already exists, it won't freak out
-            dem_path = f"{dem_subdir}/{title}.tif"
+            dem_path = os.path.join(dem_subdir, f"{lhd_id}_MERGED_DEM.tif")
             lhd_df.at[index, "dem_dir"] = dem_subdir # save the path to the specific dem folder to the DataFrame
+            titles = [sanitize_filename(dem.get("title", "")) for dem in results]
+            download_urls = [dem.get("downloadURL") for dem in results]
 
-            path_list.append(dem_path)
-            url_list.append(dem.get("downloadURL"))
-
-    unique_dems = {}
-    for path, url in zip(path_list, url_list):
-        if path not in unique_dems:
-            unique_dems[path] = url
-
-    for path, url in unique_dems.items():
-        if not os.path.exists(path):
-            with requests.get(url, stream=True) as r:
-                r.raise_for_status()
-                with open(path, "wb") as f:
-                    for chunk in r.iter_content(chunk_size=8192):
-                        f.write(chunk)
-            # print(f"Saved to {path}")
-        else:
-            print(f"File already exists at {path}")
+            if len(results) > 1:
+                temp_paths = [os.path.join(dem_subdir, title, ".tif") for title in titles]
+                for i in range(len(results)):
+                    url = download_urls[i]
+                    path = temp_paths[i]
+                    with requests.get(url, stream=True) as r:
+                        r.raise_for_status()
+                        with open(path, "wb") as f:
+                            for chunk in r.iter_content(chunk_size=8192):
+                                f.write(chunk)
+                merge_dems(temp_paths, dem_path)
+            else:
+                with requests.get(download_urls[0]) as r:
+                    r.raise_for_status()
+                    with open(dem_path, "wb") as f:
+                        for chunk in r.iter_content(chunk_size=8192):
+                            f.write(chunk)
     # lhd_df now has a column with the location of the dem associated with each dam
     return lhd_df
 
-# """
-# old test case
-# """
-# import pandas as pd
-# database_csv = "C:/Users/ki87ujmn/Downloads/rathcelon-example/LHD_lat_long.csv"
-# database_df = pd.read_excel(database_csv)
-# output_loc = "./dem"
-# new_df = download_dems(database_df, output_loc)
-#
-# new_df.to_csv("C:/Users/ki87ujmn/Downloads/test_dem.csv", index=False)
