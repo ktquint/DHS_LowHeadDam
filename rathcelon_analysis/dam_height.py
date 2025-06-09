@@ -1,36 +1,36 @@
-# import numpy as np
-# import pandas as pd
-#
-# def weir_height(Q, b, y_u, tol=0.001):
-#     """
-#     Q = flow in river (cms)
-#     b = bank width (m)
-#     y_u = upstream depth (m)
-#     """
-#     q = Q / b # unit flow
-#     g = 9.81 # gravitational constant
-#     # left-hand side
-#     A = 3 * q / (2 * np.sqrt(2 * g))
-#     # initial weir height estimate
-#     p = 0.5 * y_u # we want to start with a positive number < y_u
-#     # right-hand side
-#     B = 0.611 * (y_u - p)**(3/2) + 0.075 * ((y_u - p)**(5/2))/p
-#     counter = 0 # to avoid infinite loop
-#     while abs(A - B) > tol:
-#         counter += 1
-#         if A < B:
-#             p += 0.001
-#         else:
-#             p -= 0.001
-#         # recalculate B after adjusting height
-#         B = 0.611 * (y_u - p) ** (3 / 2) + 0.075 * ((y_u - p) ** (5 / 2)) / p
-#         if counter > 10000:
-#             break
-#     return round(p, 3)
-#
-#
-# dam_info = pd.read_csv("C:/Users/ki87ujmn/OneDrive - Brigham Young University/MS BYU/Dam Data/height_test.csv")
-# dam_info['p'] = 0
-# for index, row in dam_info.iterrows():
-#     dam_info.at[index, 'p'] = weir_height(row['Q'], row['b'], row['y_u'])
-# print(dam_info)
+import pandas as pd
+import matplotlib.pyplot as plt
+
+lhd_df = pd.read_csv("C:/Users/ki87ujmn/Downloads/LHD_RathCelon/LowHead_Dam_Database.csv")
+
+fig, ax = plt.subplots()
+
+cross_sections = {
+    "P_1": ("lightblue", "o"),
+    "P_2": ("green", "s"),
+    "P_3": ("cyan", "^"),
+    "P_4": ("dodgerblue", "d"),
+}
+
+counter = 0
+for XS, (color, marker) in cross_sections.items():
+    counter += 1
+    ax.scatter(lhd_df["P_known"], lhd_df[XS],
+               color=color, marker=marker, label=f'Cross-Section {counter}', alpha=0.8)
+
+# Plot the 1:1 line (perfect agreement)
+min_val = 0
+max_val = max(lhd_df['P_known'])
+ax.plot([min_val, max_val], [min_val, max_val], linestyle='-', color='black', label='Perfect Agreement')
+
+# Labels and legend
+ax.set_xlabel("NID Heights (ft)")
+ax.set_ylabel("Estimated Values (ft)")
+ax.set_title("Estimated Dam Height Against National Inventory of Dams")
+ax.legend()
+ax.grid(True)
+ax.set_xlim(left=0)
+ax.set_ylim(bottom=0)
+
+plt.tight_layout()
+plt.show()

@@ -14,7 +14,8 @@ def rathcelon_input (lhd_csv, output_loc):
         flowline = row["flowline"]
         dem_dir = row["dem_dir"]
         output_dir = row["output_dir"]
-        known_baseflow = row["known_baseflow"]
+        if row["known_baseflow"] is not None:
+            known_baseflow = row["known_baseflow"]
         dam_dict = {
             "name" : name,
             "dam_csv" : dam_csv,

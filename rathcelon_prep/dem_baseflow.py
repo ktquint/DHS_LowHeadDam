@@ -23,7 +23,7 @@ def get_dem_dates(lat, lon):
     }
 
     response = requests.get(base_url, params=params)
-    print(response.text)
+    # print(response.text)
     lidar_info = response.json().get("items", [])
 
     if not lidar_info:
@@ -64,21 +64,23 @@ def get_streamflow(comid, lat=None, lon=None):
         raise ValueError("comid needs to be an int")
 
     # this is all the data for the comid
-    historic_df = geoglows.data.retro_daily(comid)
+    historic_df = geoglows.data.retro_daily(comid, bias_corrected=True)
     historic_df.index = pd.to_datetime(historic_df.index)
 
     if lat and lon is not None:
         try:
             date_range = get_dem_dates(lat, lon)
-            print(date_range)
-            subset_df = historic_df.loc[date_range[0]:date_range[1]]
-            Q = np.median(subset_df[comid])
+            # print(date_range)
+            if len(date_range) == 2:
+                subset_df = historic_df.loc[date_range[0]:date_range[1]]
+                Q = np.median(subset_df[comid])
+            else: # if it returns an error statement, just return the historic median
+                Q = np.median(historic_df[comid])
         except IndexError:
             date_range = get_dem_dates(lat, lon)
             raise ValueError(f"No data available for {date_range}")
     else:
         Q = np.median(historic_df[comid])
-
     return Q
 
 def add_known_baseflow(lhd_df, hydrology):

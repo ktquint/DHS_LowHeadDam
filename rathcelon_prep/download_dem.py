@@ -143,7 +143,7 @@ def download_dems(lhd_df, dem_dir, resolution):
         dem_path = os.path.join(dem_subdir, f"{lhd_id}_MERGED_DEM.tif")
 
         if not os.path.isfile(dem_path):
-
+            print(f"Downloading DEM for {lhd_id}")
             lat = row['latitude']
             lon = row['longitude']
             bounding_dist = 2 * row.weir_length
@@ -166,64 +166,76 @@ def download_dems(lhd_df, dem_dir, resolution):
 
                     results = response.json().get("items", [])
 
-                    # Filter to get only the most recent DEM per tile
-                    filtered = []
-                    for item in results:
-                        title = item.get("title", "")
-                        if extract_tile_id(title) and extract_date(item):
-                            filtered.append(item)
+                    if len(results) > 1 and resolution == "1 m":
+                        # Filter to get only the most recent DEM per tile
+                        filtered = []
+                        for item in results:
+                            title = item.get("title", "")
+                            if extract_tile_id(title) and extract_date(item):
+                                filtered.append(item)
 
-                    # Build dict of most recent item per tile
-                    tile_to_item = {}
-                    for item in filtered:
-                        title = item.get("title", "")
-                        tile_id = extract_tile_id(title)
-                        date_str = extract_date(item)
-                        try:
-                            date_obj = datetime.fromisoformat(date_str)
-                        except ValueError:
-                            continue  # skip if date format is wrong
+                        # Build dict of most recent item per tile
+                        tile_to_item = {}
+                        for item in filtered:
+                            title = item.get("title", "")
+                            tile_id = extract_tile_id(title)
+                            date_str = extract_date(item)
+                            try:
+                                date_obj = datetime.fromisoformat(date_str)
+                            except ValueError:
+                                continue  # skip if date format is wrong
 
-                        if tile_id not in tile_to_item or date_obj > tile_to_item[tile_id][0]:
-                            tile_to_item[tile_id] = (date_obj, item)
+                            if tile_id not in tile_to_item or date_obj > tile_to_item[tile_id][0]:
+                                tile_to_item[tile_id] = (date_obj, item)
 
-                    # Extract only the most recent item per tile
-                    results = [entry[1] for entry in tile_to_item.values()]
+                        # Extract only the most recent item per tile
+                        results = [entry[1] for entry in tile_to_item.values()]
+                        titles = [sanitize_filename(dem.get("title", "")) for dem in results]
+                        download_urls = [dem.get("downloadURL") for dem in results]
 
-                    # this logic prevents exits the loop once it downloads a DEM
-                    if not results:
-                        # print(f"No results found for {dataset} data.")
-                        continue
+                        temp_paths = [os.path.join(dem_subdir, f"{title}.tif") for title in titles]
+                        print(temp_paths)
+                        for i in range(len(results)):
+                            url = download_urls[i]
+                            path = temp_paths[i]
+                            with requests.get(url, stream=True) as r:
+                                r.raise_for_status()
+                                with open(path, "wb") as f:
+                                    for chunk in r.iter_content(chunk_size=8192):
+                                        f.write(chunk)
+                        merge_dems(temp_paths, dem_path)
+
+                    elif len(results) > 1 and resolution != "1 m":
+                        titles = [sanitize_filename(dem.get("title", "")) for dem in results]
+                        download_urls = [dem.get("downloadURL") for dem in results]
+                        temp_paths = [os.path.join(dem_subdir, f"{title}.tif") for title in titles]
+                        for i in range(len(results)):
+                            url = download_urls[i]
+                            path = temp_paths[i]
+                            with requests.get(url, stream=True) as r:
+                                r.raise_for_status()
+                                with open(path, "wb") as f:
+                                    for chunk in r.iter_content(chunk_size=8192):
+                                        f.write(chunk)
+                        merge_dems(temp_paths, dem_path)
+
+                    elif len(results) == 1:
+                        download_urls = [dem.get("downloadURL") for dem in results]
+                        with requests.get(download_urls[0]) as r:
+                            r.raise_for_status()
+                            with open(dem_path, "wb") as f:
+                                for chunk in r.iter_content(chunk_size=8192):
+                                    f.write(chunk)
                     else:
                         # print(f"Found {len(results)} result for {dataset} data.")
-                        break
+                        continue
 
                 except requests.RequestException as e:
                     print(f"Error occurred: {e}")
             if not results: # if there's no results for any (highly unlikely), it will skip over the dam and keep going
                 continue
 
-            titles = [sanitize_filename(dem.get("title", "")) for dem in results]
-            download_urls = [dem.get("downloadURL") for dem in results]
-
-            if len(results) > 1:
-                temp_paths = [os.path.join(dem_subdir, f"{title}.tif") for title in titles]
-                for i in range(len(results)):
-                    url = download_urls[i]
-                    path = temp_paths[i]
-                    with requests.get(url, stream=True) as r:
-                        r.raise_for_status()
-                        with open(path, "wb") as f:
-                            for chunk in r.iter_content(chunk_size=8192):
-                                f.write(chunk)
-                merge_dems(temp_paths, dem_path)
-            else:
-                with requests.get(download_urls[0]) as r:
-                    r.raise_for_status()
-                    with open(dem_path, "wb") as f:
-                        for chunk in r.iter_content(chunk_size=8192):
-                            f.write(chunk)
+        print(dem_subdir)
         lhd_df.at[index, "dem_dir"] = dem_subdir
     # lhd_df now has a column with the location of the dem associated with each dam
     return lhd_df
-

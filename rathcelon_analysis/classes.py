@@ -522,7 +522,7 @@ class Dam:
                 # ths one has delta z = 0
                 P_i = dam_height(self.known_baseflow, self.weir_length, delta_wse_i, y_i, z_i)
                 if P_i < 1 or P_i > 100:
-                    P_i = 3.05 # according to the literature, this is one of the most common dam heights
+                    P_i = 1 # 3.05 # according to the literature, this is one of the most common dam heights
                 self.cross_sections[i].set_dam_height(P_i)
                 lhd_df.loc[lhd_df['ID'] == self.id, f'P_{i + 1}'] = P_i * 3.281 # convert to ft
 
