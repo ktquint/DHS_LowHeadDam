@@ -6,49 +6,62 @@ import pandas as pd
 
 
 def get_dem_dates(lat, lon):
-
     """
     Use lat/lon to get Lidar data used to make the DEM.
     Check the date the Lidar was taken.
     """
     bbox = (lon - 0.001, lat - 0.001, lon + 0.001, lat + 0.001)
-    dataset = "Lidar Point Cloud (LPC)"
     base_url = "https://tnmaccess.nationalmap.gov/api/v1/products"
 
     params = {
         "bbox": f"{bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]}",
-        "datasets": dataset,
+        "datasets": "Lidar Point Cloud (LPC)",
         "max": 1,
         "outputFormat": "JSON"
     }
 
-    response = requests.get(base_url, params=params)
-    # print(response.text)
-    lidar_info = response.json().get("items", [])
+    try:
+        response = requests.get(base_url, params=params)
+        response.raise_for_status()
 
-    if not lidar_info:
-        print("No Lidar data found for the given coordinates.")
-        return "No Lidar data found for the given coordinates."
+        if 'application/json' not in response.headers.get("Content-Type", ""):
+            print("Response not in JSON format:", response.text)
+            return "Invalid format"
 
-    meta_url = lidar_info[0].get('metaUrl')
-    if not meta_url:
-        print("metaUrl key not found in the response.")
-        return "metaUrl key not found in the response."
+        data = response.json()
+        lidar_info = data.get("items", [])
+        if not lidar_info:
+            print("No Lidar data found for the given coordinates.")
+            return "No Lidar data found for the given coordinates."
 
-    response2 = requests.get(meta_url)
-    # print(response2.text)
-    html_content = response2.text
+        meta_url = lidar_info[0].get('metaUrl')
+        if not meta_url:
+            print("metaUrl key not found in the response.")
+            return "metaUrl key not found in the response."
 
-    match_start = re.search(r'<dt>Start Date</dt>\s*<dd>(.*?)</dd>', html_content, re.IGNORECASE)
-    match_end = re.search(r'<dt>End Date</dt>\s*<dd>(.*?)</dd>', html_content, re.IGNORECASE)
+        response2 = requests.get(meta_url)
+        html_content = response2.text
 
-    if match_start and match_end:
-        start_date_value = match_start.group(1).strip()
-        end_date_value = match_end.group(1).strip()
-        return [start_date_value, end_date_value]
-    else:
-        print("Date parameters not found.")
-        return "Date parameters not found."
+        match_start = re.search(r'<dt>Start Date</dt>\s*<dd>(.*?)</dd>', html_content, re.IGNORECASE)
+        match_end = re.search(r'<dt>End Date</dt>\s*<dd>(.*?)</dd>', html_content, re.IGNORECASE)
+
+        if match_start and match_end:
+            start_date_value = match_start.group(1).strip()
+            end_date_value = match_end.group(1).strip()
+            return [start_date_value, end_date_value]
+        else:
+            print("Date parameters not found.")
+            return "Date parameters not found."
+
+    except requests.exceptions.RequestException as e:
+        print(f"Request failed: {e}")
+        return "Request failed"
+
+    except ValueError as ve:
+        print(f"JSON decode error: {ve}")
+        # noinspection PyUnboundLocalVariable
+        print("Raw response text:", response.text[:300])
+        return "JSON decode error"
 
 
 def get_streamflow(comid, lat=None, lon=None):
@@ -83,13 +96,21 @@ def get_streamflow(comid, lat=None, lon=None):
         Q = np.median(historic_df[comid])
     return Q
 
+
 def add_known_baseflow(lhd_df, hydrology):
-    lhd_df['known_baseflow'] = None
+    if 'known_baseflow' not in lhd_df.columns:
+        lhd_df['known_baseflow'] = None
+
     if hydrology == "GEOGLOWS":
         for index, row in lhd_df.iterrows():
-            linkno = row.LINKNO
-            lat = row.latitude
-            lon = row.longitude
+            # skip rows that already have known base flows
+            if pd.notnull(row['known_baseflow']):
+                continue
+
+            linkno = row["LINKNO"]
+            lat = row["latitude"]
+            lon = row["longitude"]
+
             dem_streamflow = get_streamflow(linkno, lat, lon)
             lhd_df.at[index, "known_baseflow"] = dem_streamflow
             print(f'index: {index}')
@@ -100,11 +121,13 @@ def add_known_baseflow(lhd_df, hydrology):
 
 
 def add_dem_dates(lhd_df):
-    lhd_df['dem_start'] = ""
-    lhd_df['dem_end'] = ""
+    lhd_df['dem_start'] = None
+    lhd_df['dem_end'] = None
     for index, row in lhd_df.iterrows():
         lat = row.latitude
         lon = row.longitude
-        lhd_df.at[index, "dem_start"] = get_dem_dates(lat, lon)[0]
-        lhd_df.at[index, "dem_end"] = get_dem_dates(lat, lon)[1]
+        date_range = get_dem_dates(lat, lon)
+        if isinstance(date_range, list) and len(date_range) == 2:
+            lhd_df.at[index, "dem_start"] = date_range[0]
+            lhd_df.at[index, "dem_end"] = date_range[1]
     return lhd_df

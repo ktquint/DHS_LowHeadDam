@@ -18,7 +18,7 @@ def extract_tile_id(title):
 
 def sanitize_filename(filename):
     """
-        some files have '/' in their name like "1/9 arc-second," so we'll fix it
+        some files have '/' in their name like "1/3 arc-second," so we'll fix it
     """
     invalid_chars = ['/', '\\', ':', '*', '?', '"', '<', '>', '|']
     for char in invalid_chars:
@@ -163,10 +163,17 @@ def download_dems(lhd_df, dem_dir, resolution):
                 try:
                     response = requests.get(base_url, params=params)
                     response.raise_for_status() # not sure what this does
-
                     results = response.json().get("items", [])
+                    """
+                        what we does next depends on the resolution of the DEM, and the number of results
+                    """
+                    if len(results) == 0:
+                        print(f"No results for {dataset}...\n Onto the next one!")
+                        continue
 
-                    if len(results) > 1 and resolution == "1 m":
+                    # -------------------------- MULTIPLE 1-M DEMS --------------------------- #
+                    elif dataset == "Digital Elevation Model (DEM) 1 meter" and len(results) > 1:
+                        print(results)
                         # Filter to get only the most recent DEM per tile
                         filtered = []
                         for item in results:
@@ -205,7 +212,8 @@ def download_dems(lhd_df, dem_dir, resolution):
                                         f.write(chunk)
                         merge_dems(temp_paths, dem_path)
 
-                    elif len(results) > 1 and resolution != "1 m":
+                    # ------------------ MULTIPLE 1/3 OR 1/9 ARC-SECOND DEMS ----------------- #
+                    elif dataset != "Digital Elevation Model (DEM) 1 meter" and len(results) > 1:
                         titles = [sanitize_filename(dem.get("title", "")) for dem in results]
                         download_urls = [dem.get("downloadURL") for dem in results]
                         temp_paths = [os.path.join(dem_subdir, f"{title}.tif") for title in titles]
@@ -219,6 +227,7 @@ def download_dems(lhd_df, dem_dir, resolution):
                                         f.write(chunk)
                         merge_dems(temp_paths, dem_path)
 
+                    # ---- SINGULAR DEMS ---- #
                     elif len(results) == 1:
                         download_urls = [dem.get("downloadURL") for dem in results]
                         with requests.get(download_urls[0]) as r:
@@ -226,9 +235,6 @@ def download_dems(lhd_df, dem_dir, resolution):
                             with open(dem_path, "wb") as f:
                                 for chunk in r.iter_content(chunk_size=8192):
                                     f.write(chunk)
-                    else:
-                        # print(f"Found {len(results)} result for {dataset} data.")
-                        continue
 
                 except requests.RequestException as e:
                     print(f"Error occurred: {e}")
