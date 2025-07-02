@@ -1,8 +1,12 @@
 import re
+import zarr
 import geoglows
 import requests
 import numpy as np
 import pandas as pd
+import xarray as xr
+from dateutil import parser
+from datetime import datetime, timedelta
 
 
 def get_dem_dates(lat, lon):
@@ -116,18 +120,9 @@ def add_known_baseflow(lhd_df, hydrology):
             print(f'index: {index}')
             print(f'known baseflow: {dem_streamflow}')
     else:
-        print("NWM is not ready... lol")
-    return lhd_df
+        s3_path = 's3://noaa-nwm-retrospective-2-1-zarr-pds/chrtout.zarr'
+        # noinspection PyTypeChecker
+        nwm_ds = xr.open_dataset(s3_path, storage_options={"anon": True}, consolidated=True)
+        API_KEY = 'AIzaSyC4BXXMQ9KIodnLnThFi5Iv4y1fDR4U1II'
 
-
-def add_dem_dates(lhd_df):
-    lhd_df['dem_start'] = None
-    lhd_df['dem_end'] = None
-    for index, row in lhd_df.iterrows():
-        lat = row.latitude
-        lon = row.longitude
-        date_range = get_dem_dates(lat, lon)
-        if isinstance(date_range, list) and len(date_range) == 2:
-            lhd_df.at[index, "dem_start"] = date_range[0]
-            lhd_df.at[index, "dem_end"] = date_range[1]
     return lhd_df

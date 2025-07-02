@@ -217,17 +217,29 @@ def compare_1m_to_10m(one_meter_results, ten_meter_results):
             create_rating_curves(one_meter_data, ten_meter_data, lhd_id)
 
 
+def count_rows_in_dbf(file_path):
+    try:
+        table = DBF(file_path)
+        row_count = len(table)
+        print(f"Number of rows in '{file_path}': {row_count}")
+        return row_count
+    except Exception as e:
+        print(f"Error reading DBF file: {e}")
+
+
 def count_good_files(results_dir):
     rath_runs = [d for d in os.listdir(results_dir)]
 
     # okay, let's loop through each run and do some magic...
     for lhd_id in rath_runs:
         lhd_result = os.path.join(results_dir, lhd_id)
+        dbf_path = os.path.join(lhd_result, "VDT", f"{lhd_id}_Local_CurveFile.dbf")
         if run_successful(lhd_result):
             print(f"{lhd_id} was ran successfully")
+            print(count_rows_in_dbf(dbf_path))
 
 
 # compare_1m_to_10m("E:\LHD_Project\LHD_Results", "E:\LHD_1-3_arc-second - Copy\LHD_Results")
-count_good_files("E:\LHD_Project\LHD_Results")
+count_good_files("E:\LHD_1-3_arc-second - Copy\LHD_Results")
 
 

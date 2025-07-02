@@ -1,6 +1,7 @@
 import os
 import ast
 import numpy as np
+from dbfread import DBF
 import pandas as pd
 import tkinter as tk
 from tkinter import ttk
@@ -34,7 +35,9 @@ def select_project_dir():
 def update_dropdown():
     results_dir = results_entry.get()
     if os.path.isdir(results_dir):
-        dams = sorted([int(d) for d in os.listdir(results_dir) if d != '.DS_Store'])
+        dam_strs = successful_runs(results_dir)
+        dams = sorted([int(d) for d in dam_strs])
+        # dams = sorted([int(d) for d in os.listdir(results_dir) if d != '.DS_Store'])
         dams.insert(0, "All Dams")
         dropdown['values'] = dams
         if dams:
@@ -222,6 +225,33 @@ def plot_map(dam):
     canvas.draw()
     canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
+
+def successful_runs(results_dir):
+    dam_nos = [str(d) for d in os.listdir(results_dir) if d != '.DS_Store']
+    # make a list of all the directories with results
+    for i in range(0, len(dam_nos)):
+        dam_nos[i] = os.path.join(results_dir, dam_nos[i])
+
+    # make a new list of successful_runs
+    successes = []
+
+    for run_results_dir in dam_nos:
+        lhd_id = os.path.basename(run_results_dir)
+        dbf_path = os.path.join(run_results_dir, "VDT", f"{lhd_id}_Local_VDT_Database.dbf")
+        if not os.path.exists(dbf_path):
+            continue
+        try:
+            local_vdt_dbf = DBF(dbf_path)
+            local_vdt_df = pd.DataFrame(iter(local_vdt_dbf))
+            if not local_vdt_df.empty:
+                successes.append(lhd_id)
+            else:
+                continue
+        except Exception as e:
+            print(f"Error reading DBF for {lhd_id}: {e}")
+            return False
+    return successes
+
 # Your custom function using the folder path from the entry
 def process_ARC():
     # project_dir holds all the project files
@@ -235,7 +265,8 @@ def process_ARC():
     # get the numbers of all folders in results folder
 
     if dropdown.get() == "All Dams":
-        dam_ints = sorted([int(d) for d in os.listdir(results_dir) if d != '.DS_Store'])
+        dam_strs = successful_runs(results_dir)
+        dam_ints = sorted([int(d) for d in dam_strs])
         for dam_id in dam_ints:
             print(f"Analyzing Dam No. {dam_id}")
             dam_i = Dam(int(dam_id), database_csv, project_dir, selected_model, estimate_dam)

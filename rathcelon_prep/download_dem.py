@@ -28,8 +28,8 @@ def sanitize_filename(filename):
 
 def meters_to_latlon(lat0, lon0, dx, dy):
     R = 6378137  # radius of Earth in meters (WGS84)
-    dlat = dy / R
-    dlon = dx / (R * math.cos(math.radians(lat0)))
+    dlat = int(dy) / R
+    dlon = int(dx) / (R * math.cos(math.radians(lat0)))
 
     new_lat = lat0 + math.degrees(dlat)
     new_lon = lon0 + math.degrees(dlon)
