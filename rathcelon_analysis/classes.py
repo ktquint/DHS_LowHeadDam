@@ -6,58 +6,26 @@ the ID_XS_Out.txt file for each dam
 
 Dam holds the cross-section information
 """
-#
-###
-#####
-#######
-import os
-import ast
-import math
-import pyproj
-import rasterio
-import geoglows
-import numpy as np
-import pandas as pd
-import dbfread as dbf
-import geopandas as gpd
-import contextily as ctx
-from rasterio.plot import show
-import matplotlib.pyplot as plt
-from scipy.optimize import fsolve
-from rasterio.io import MemoryFile
-from matplotlib.ticker import FixedLocator
+
+import os               # interacts with the operating system (e.g., file paths, directories)
+import ast              # safely parses Python code or literals (e.g., safe string-to-list conversion)
+import math             # Standard math functions (trigonometry, logarithms, rounding, etc.)
+import pyproj           # handles CRS conversions
+import rasterio         # reads, writes, and processes raster datasets
+import numpy as np      # numerical computing with support for arrays, matrices, and math functions
+import pandas as pd     # data analysis and manipulation tool; reads in CSV, TXT, XLSX files
+import dbfread as dbf   # reads DBF (dBase) files (the rathcelon output)
+import geopandas as gpd # extends pandas for working with geospatial vector data (points, lines, polygons)
+import contextily as ctx    # adds basemaps (e.g., OpenStreetMap) to geospatial plots, often used with geopandas
+import hydraulics as hyd    # hydraulic calculations and functions (my own code)
+import hydroinformatics as hi   # access streamflow information (retrospective and return period flows)
+from rasterio.plot import show  # displays raster datasets with matplotlib
+import matplotlib.pyplot as plt # creates static, animated, and interactive plots and graphs
+from rasterio.io import MemoryFile  # allows in-memory reading/writing of raster files without saving to disk
+from matplotlib.ticker import FixedLocator  # custom axis tick locations in plots
 from rasterio.warp import calculate_default_transform, reproject, Resampling
-
-
-g = 9.81 # grav. const.
-
-
-def head_eq(H, P, q):
-    return (2 / 3) * (0.611 + 0.075 * (H / P)) * np.sqrt(2 * g) * H ** (3/2) - q
-
-
-def Fr_eq(Fr, x):
-    # x = H/P
-    A = (9 / (4 * (0.611 + 0.075 * x)**2)) * 0.5 * Fr**2
-    term1 = A**(1/3) * (1 + 1/x)
-    term2 = 0.5 * Fr**2 * (1 + 0.1/x)
-    return 1 - term1 + term2
-
-
-# noinspection PyTypeChecker
-def compute_flip_and_conjugate(Q, L, P):
-    # print(Q, L, P)
-    q = Q / L
-    H = fsolve(head_eq, x0=1.0, args=(P, q))[0] # x0 is initial guess for H
-    y_flip = (H + P) / 1.1
-
-    # on leuthusser's graphs, the x-axis is H/P
-    x = H / P
-    coeffs = [1, -(1 + 1 / x), 0, (4 / 9) * (0.611 + 0.075 * x) ** 2 * (1 + 0.1 / x)]
-    y_1 = min([r.real for r in np.roots(coeffs) if np.isreal(r) and r.real > 0]) * H
-    Fr_1 = fsolve(Fr_eq, x0=100, args=(x,))[0] # x0 is initial guess for Fr_1
-    y_2 = y_1 * 0.5 * (-1 + np.sqrt(1 + 8 * Fr_1 ** 2))
-    return y_flip, y_2
+                                            # functions for reprojection and resampling of raster datasets
+                                            # (coordinate transforms, resolution changes)
 
 
 def round_sigfig(num, sig_figs):
@@ -65,102 +33,6 @@ def round_sigfig(num, sig_figs):
         return 0
     else:
         return round(num, sig_figs - int(math.floor(math.log10(abs(num)))) - 1)
-
-
-def x_intercept(x_1, y_1, y_2):
-    for i in range(1, len(x_1)):
-        y_low, y_high = y_1[i-1], y_1[i]
-        x_low, x_high = x_1[i-1], x_1[i]
-
-        if (y_low - y_2) * (y_high - y_2) <= 0 and y_low != y_high:
-            # linearly interpolate
-            ratio = (y_2 - y_low) / (y_high - y_low)
-            x_2 = x_low + ratio * (x_high - x_low)
-            return x_2
-    return None
-
-
-def get_streamflow(comid, date):
-    """
-        comid needs to be an int
-        date needs to be in the format "%Y-%m-%d"
-
-        returns average streamflow—for the entire record if no lat-long is given, else it's the average from the dates the lidar was taken
-    """
-    try:
-        comid = int(comid)
-    except ValueError:
-        raise ValueError("comid needs to be an int")
-
-    # this is all the data for the comid
-    try:
-        historic_df = geoglows.data.retrospective(river_id=comid, bias_corrected=True)
-        historic_df.index = pd.to_datetime(historic_df.index)  # Ensure it's a DateTimeIndex
-
-        if '-' in date and len(date) == 10:  # YYYY-MM-DD (corrected)
-            date_dt = pd.to_datetime(date, format='%Y-%m-%d', errors="coerce")
-            if pd.isna(date_dt):  # Check if conversion failed
-                return None
-            filtered_df = historic_df[historic_df.index.strftime('%Y-%m-%d') == date_dt.strftime('%Y-%m-%d')]
-
-        elif '-' in date and len(date) == 7:  # MM/YYYY
-            date_dt = pd.to_datetime(date, format='%Y-%m', errors="coerce")
-            if pd.isna(date_dt):
-                return None
-            filtered_df = historic_df[(historic_df.index.year == date_dt.year) & (historic_df.index.month == date_dt.month)]
-
-        elif len(date) == 4 and date.isdigit():  # YYYY
-            date_dt = pd.to_datetime(date, format='%Y', errors="coerce")
-            if pd.isna(date_dt):
-                return None
-            filtered_df = historic_df[historic_df.index.year == date_dt.year]
-
-
-        else:
-            return None
-
-        if not filtered_df.empty:
-            return filtered_df.median().values[0]
-
-    except Exception as e:
-        print(f"Error retrieving streamflow data for COMID {comid} and date {date}: {e}")
-
-    return None
-
-
-def dam_height(Q, b, delta_wse, y_t, delta_z=0):
-    """
-        eq.1: P = delta_wse - H + y_t + dela_z
-        ... but we need to find H
-        also—all these calcs are in metric units
-
-        eq.2: q = (2/3) * C_w * np.sqrt(2 * g) * H**(3/2)
-              where,
-              C_w = 0.611 + 0.075 * H/P
-    """
-
-    # constant terms
-    q = Q/b  # discharge (m^2/s)
-    ## derived constants
-    A = (2 / 3) * np.sqrt(2 * g)
-    D = delta_wse + y_t + delta_z  # total pressure head + elevation
-
-    # solve for q in terms of H
-    def func(H):
-        if H >= D:  # avoid division by zero or negative P
-            return 1e6
-        lhs = q / A
-        rhs = 0.611 * H ** (3 / 2) + 0.075 * H ** (5 / 2) / (D - H)
-        return lhs - rhs
-
-    # Initial guess for H (must be less than D)
-    H_0 = D * 0.8
-    # Solve for H
-    H_sol = fsolve(func, H_0)[0]
-
-    # plug H into eq.1
-    P = D - H_sol
-    return round(P, 3)
 
 
 class CrossSection:
@@ -202,7 +74,7 @@ class CrossSection:
         # cross-section plot info
         self.wse = xs_row['Elev']
         # i'll make two lists that i'll populate with just the wse values... you'll see why in a minute
-        INVALID_THRESHOLD = -1e6
+        INVALID_THRESHOLD = -1e5
         y_1 = xs_row['XS1_Profile'][::-1] # since these go from the center out, i'll flip them around
         y_2 = xs_row['XS2_Profile']
         x_1 = [0 + j * xs_row['Ordinate_Dist'] for j in range(len(y_1))]
@@ -244,10 +116,6 @@ class CrossSection:
 
         self.water_elevation = wse_left + wse_right
         self.water_lateral = wse_lat_left + wse_lat_right
-
-        # water surface info
-        self.wse_x_1 = x_intercept(x_1, y_1, self.wse)
-        self.wse_x_2 = x_intercept(x_2, y_2, self.wse)
 
         # initialize P, but don't give it a value yet
         self.P = None
@@ -324,7 +192,7 @@ class CrossSection:
         Y_Conjugates = []
 
         for Q in Qs:
-            Y_Flip, Y_Conj = compute_flip_and_conjugate(Q, self.L, self.P)
+            Y_Flip, Y_Conj = hyd.compute_flip_and_conjugate(Q, self.L, self.P)
             Y_Flips.append(Y_Flip)
             Y_Conjugates.append(Y_Conj)
 
@@ -410,6 +278,7 @@ class Dam:
 
 
         # fatality dates and fatal flows
+
         date_string = id_row['fatality_dates'].iloc[0]
         dates = date_string.strip("[]").split(", ")
 
@@ -422,53 +291,56 @@ class Dam:
             except ValueError:
                 try:
                     # Try converting partial date (MM/YYYY → YYYY-MM)
-                    formatted_date = pd.to_datetime(date.strip(), format="%m/%Y").strftime("%Y-%m")
+                    _ = pd.to_datetime(date.strip(), format="%m/%Y").strftime("%Y-%m")
+                    continue
                 except ValueError:
                     # If neither format applies, keep original
-                    formatted_date = date.strip()
+                    continue
 
             formatted_dates.append(formatted_date)
 
         self.fatality_dates = formatted_dates
+        print(self.fatality_dates)
 
+        # ----------------------------------------- HYDROLOGIC INFORMATION ------------------------------------------- #
+
+        fatal_flows = []
         if hydrology == "GEOGLOWS":
-            # check to see if we already have a fatal flows column
-            if 'fatal_flows' not in lhd_df.columns:
-                lhd_df['fatal_flows'] = None
-                fatal_flows = []
-                for date in self.fatality_dates:
-                    flow_value = get_streamflow(id_row['LINKNO'].iloc[0], date)  # Ensure single value extraction
-                    # print(flow_value)
-                    try:
-                        float_flow = float(flow_value)
-                        fatal_flows.append(float_flow)
-                    except (ValueError, TypeError):
-                        continue
-                self.fatal_flows = fatal_flows
-                # if we're getting them for the first time we'll save them to the csv
-                lhd_df.loc[lhd_df['ID'] == self.id, 'fatal_flows'] = str(self.fatal_flows)
-            # if there is a fatal_flows' column, we need to check to see if it's already filled out
-            else:
-                # if the row doesn't have fatal flows we'll get them
-                if pd.isna(id_row['fatal_flows'].values[0]):
-                    fatal_flows = []
-                    for date in self.fatality_dates:
-                        flow_value = get_streamflow(id_row['LINKNO'].iloc[0], date)  # Ensure single value extraction
-                        try:
-                            float_flow = float(flow_value)
-                            fatal_flows.append(float_flow)
-                        except (ValueError, TypeError):
-                            continue
-                    self.fatal_flows = fatal_flows
-                    # if we're getting them for the first time we'll save them to the csv
-                    lhd_df.loc[lhd_df['ID'] == self.id, 'fatal_flows'] = str(self.fatal_flows)
+            # establish which values to use as the comid
+            self.comid = id_row['LINKNO'].values[0]
 
-                # if the row has flow values we'll save them to our damn object
-                else:
-                    self.fatal_flows = ast.literal_eval(id_row.at[0, 'fatal_flows'])
-        else:
+        elif hydrology == "USGS":
             fatal_flows = id_row['USGS_fatal_flows'].apply(ast.literal_eval).values[0]
             self.fatal_flows = [Q / 35.315 for Q in fatal_flows]
+
+        else:   # NWM
+            self.comid = id_row['reach_id'].values[0]
+
+        # check to see if we already have a fatal flows column
+        if 'fatal_flows' not in lhd_df.columns:
+            lhd_df['fatal_flows'] = None
+
+        # if the fatal_flows column is empty in the row we'll populate it
+        elif pd.isna(id_row['fatal_flows'].values[0]):
+
+            for date in self.fatality_dates:
+                flow_value = hi.get_streamflow(hydrology, self.comid, [date, date])
+
+                try:
+                    # convert the np.float to a float
+                    float_flow = float(flow_value)
+                    fatal_flows.append(float_flow)
+
+                except (ValueError, TypeError):
+                    continue
+
+            self.fatal_flows = fatal_flows
+            # if we're getting them for the first time we'll save them to the csv
+            lhd_df.loc[lhd_df['ID'] == self.id, 'fatal_flows'] = str(self.fatal_flows)
+
+        # if there are already values we'll add them to our local variable
+        else:
+            self.fatal_flows = ast.literal_eval(id_row.at[0, 'fatal_flows'])
 
         # find attributes based on the vdt and xs files
         local_loc = os.path.join(results_dir, "VDT", f"{str(self.id)}_Local_CurveFile.dbf")
@@ -535,7 +407,7 @@ class Dam:
                 z_i = -1 * self.cross_sections[i].slope * self.cross_sections[i].distance
                 # P_i = dam_height(Q_i, L_i, delta_wse_i, y_i, z_i)
                 # ths one has delta z = 0
-                P_i = dam_height(self.known_baseflow, self.weir_length, delta_wse_i, y_i, z_i)
+                P_i = hyd.dam_height(self.known_baseflow, self.weir_length, delta_wse_i, y_i, z_i)
                 if P_i < 1 or P_i > 100:
                     P_i = 1 # 3.05 # according to the literature, this is one of the most common dam heights
                 self.cross_sections[i].set_dam_height(P_i)
@@ -548,7 +420,7 @@ class Dam:
                     y_t = self.cross_sections[i].a * flow**self.cross_sections[i].b
 
                     # calc conj. and flip using leuthusser eq.s
-                    y_flip, y_2 = compute_flip_and_conjugate(flow, self.weir_length, P_i)
+                    y_flip, y_2 = hyd.compute_flip_and_conjugate(flow, self.weir_length, P_i)
 
                     # add those depths to their respective lists
                     y_ts.append(float(y_t))
@@ -558,7 +430,7 @@ class Dam:
                 self.cross_sections[i].set_dam_height(self.P)
                 for flow in self.fatal_flows:
                     y_t = self.cross_sections[i].a * flow ** self.cross_sections[i].b
-                    y_flip, y_2 = compute_flip_and_conjugate(flow, self.weir_length, self.P)
+                    y_flip, y_2 = hyd.compute_flip_and_conjugate(flow, self.weir_length, self.P)
                     y_ts.append(float(y_t))
                     y_flips.append(float(y_flip))
                     y_2s.append(float(y_2))

@@ -1,13 +1,11 @@
 import re
-import zarr
-import geoglows
+import io
 import requests
-import numpy as np
 import pandas as pd
-import xarray as xr
-from dateutil import parser
-from datetime import datetime, timedelta
+import hydroinformatics as hi
 
+
+gen_api_key = 'AIzaSyC4BXXMQ9KIodnLnThFi5Iv4y1fDR4U1II'
 
 def get_dem_dates(lat, lon):
     """
@@ -30,18 +28,18 @@ def get_dem_dates(lat, lon):
 
         if 'application/json' not in response.headers.get("Content-Type", ""):
             print("Response not in JSON format:", response.text)
-            return "Invalid format"
+            return None
 
         data = response.json()
         lidar_info = data.get("items", [])
         if not lidar_info:
             print("No Lidar data found for the given coordinates.")
-            return "No Lidar data found for the given coordinates."
+            return None
 
         meta_url = lidar_info[0].get('metaUrl')
         if not meta_url:
             print("metaUrl key not found in the response.")
-            return "metaUrl key not found in the response."
+            return None
 
         response2 = requests.get(meta_url)
         html_content = response2.text
@@ -55,74 +53,65 @@ def get_dem_dates(lat, lon):
             return [start_date_value, end_date_value]
         else:
             print("Date parameters not found.")
-            return "Date parameters not found."
+            return None
 
     except requests.exceptions.RequestException as e:
         print(f"Request failed: {e}")
-        return "Request failed"
+        return None
 
     except ValueError as ve:
         print(f"JSON decode error: {ve}")
         # noinspection PyUnboundLocalVariable
         print("Raw response text:", response.text[:300])
-        return "JSON decode error"
+        return None
 
 
-def get_streamflow(comid, lat=None, lon=None):
-    """
-    comid needs to be an int
-    date needs to be in the format %Y-%m-%d
-
-    returns average streamflow—for the entire record if no lat-long is given, else it's the average from the dates the lidar was taken
-    """
-    try:
-        comid = int(comid)
-    except ValueError:
-        raise ValueError("comid needs to be an int")
-
-    # this is all the data for the comid
-    historic_df = geoglows.data.retro_daily(comid, bias_corrected=True)
-    historic_df.index = pd.to_datetime(historic_df.index)
-
-    if lat and lon is not None:
-        try:
-            date_range = get_dem_dates(lat, lon)
-            # print(date_range)
-            if len(date_range) == 2:
-                subset_df = historic_df.loc[date_range[0]:date_range[1]]
-                Q = np.median(subset_df[comid])
-            else: # if it returns an error statement, just return the historic median
-                Q = np.median(historic_df[comid])
-        except IndexError:
-            date_range = get_dem_dates(lat, lon)
-            raise ValueError(f"No data available for {date_range}")
+def get_reach_id(lat, lon, API_KEY=gen_api_key):
+    r = requests.get(f"https://nwm-api.ciroh.org/geometry?lat={lat}&lon={lon}&output_format=csv&key={API_KEY}")
+    # Check for successful response (HTTP status code 200)
+    if r.status_code == 200:
+        # Convert API response to pandas DataFrame
+        df = pd.read_csv(io.StringIO(r.text))
+        # Extract first (and only) reach ID from the response
+        # print(df['station_id'].values)
+        reach_id = df['station_id'].values[0]
+        return reach_id
     else:
-        Q = np.median(historic_df[comid])
-    return Q
+        # Raise error if API request fails
+        raise requests.exceptions.HTTPError(r.text)
 
 
 def add_known_baseflow(lhd_df, hydrology):
+    """
+    Adds known baseflow estimates to the dataframe for each dam,
+    based on DEM LiDAR survey dates and hydrology source.
+    """
     if 'known_baseflow' not in lhd_df.columns:
         lhd_df['known_baseflow'] = None
 
-    if hydrology == "GEOGLOWS":
-        for index, row in lhd_df.iterrows():
-            # skip rows that already have known base flows
-            if pd.notnull(row['known_baseflow']):
-                continue
+    if hydrology != "GEOGLOWS" and 'reach_id' not in lhd_df.columns:
+        lhd_df['reach_id'] = None
 
-            linkno = row["LINKNO"]
-            lat = row["latitude"]
-            lon = row["longitude"]
+    for row in lhd_df.itertuples(index=True):
+        index = row.Index
+        # skip rows with known base flows
+        if pd.notnull(row.known_baseflow):
+            continue
 
-            dem_streamflow = get_streamflow(linkno, lat, lon)
-            lhd_df.at[index, "known_baseflow"] = dem_streamflow
-            print(f'index: {index}')
-            print(f'known baseflow: {dem_streamflow}')
-    else:
-        s3_path = 's3://noaa-nwm-retrospective-2-1-zarr-pds/chrtout.zarr'
-        # noinspection PyTypeChecker
-        nwm_ds = xr.open_dataset(s3_path, storage_options={"anon": True}, consolidated=True)
-        API_KEY = 'AIzaSyC4BXXMQ9KIodnLnThFi5Iv4y1fDR4U1II'
+        lat = row.latitude
+        lon = row.longitude
+        date_range = get_dem_dates(lat, lon)
+
+        if hydrology == "GEOGLOWS":
+            comid = row.LINKNO
+        else:
+            comid = row.reach_id
+            if pd.isnull(comid):
+                comid = get_reach_id(lat, lon)
+                lhd_df.at[index, 'reach_id'] = comid
+
+        dem_baseflow = hi.get_streamflow(hydrology, comid, date_range)
+        lhd_df.at[index, 'known_baseflow'] = dem_baseflow
+        print(f'index: {index} | known baseflow: {dem_baseflow}')
 
     return lhd_df

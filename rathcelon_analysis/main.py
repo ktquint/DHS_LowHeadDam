@@ -1,7 +1,7 @@
 import os
 import ast
 import numpy as np
-from dbfread import DBF
+import dbfread as dbf
 import pandas as pd
 import tkinter as tk
 from tkinter import ttk
@@ -241,7 +241,7 @@ def successful_runs(results_dir):
         if not os.path.exists(dbf_path):
             continue
         try:
-            local_vdt_dbf = DBF(dbf_path)
+            local_vdt_dbf = dbf.DBF(dbf_path)
             local_vdt_df = pd.DataFrame(iter(local_vdt_dbf))
             if not local_vdt_df.empty:
                 successes.append(lhd_id)
