@@ -66,52 +66,20 @@ def get_dem_dates(lat, lon):
         return None
 
 
-def get_reach_id(lat, lon, API_KEY=gen_api_key):
-    r = requests.get(f"https://nwm-api.ciroh.org/geometry?lat={lat}&lon={lon}&output_format=csv&key={API_KEY}")
-    # Check for successful response (HTTP status code 200)
-    if r.status_code == 200:
-        # Convert API response to pandas DataFrame
-        df = pd.read_csv(io.StringIO(r.text))
-        # Extract first (and only) reach ID from the response
-        # print(df['station_id'].values)
-        reach_id = df['station_id'].values[0]
-        return reach_id
-    else:
-        # Raise error if API request fails
-        raise requests.exceptions.HTTPError(r.text)
-
-
-def add_known_baseflow(lhd_df, hydrology):
+def estimate_dem_baseflow(stream_reach):
     """
-    Adds known baseflow estimates to the dataframe for each dam,
-    based on DEM LiDAR survey dates and hydrology source.
+        finds baseflow for a dem given latitude and longitude
     """
-    if 'known_baseflow' not in lhd_df.columns:
-        lhd_df['known_baseflow'] = None
+    # extract the lat and lon
+    lat = stream_reach.latitude
+    lon = stream_reach.longitude
 
-    if hydrology != "GEOGLOWS" and 'reach_id' not in lhd_df.columns:
-        lhd_df['reach_id'] = None
+    # get the date range of the lidar data
+    dem_dates = get_dem_dates(lat, lon)
+    # use the date range to estimate the baseflow
+    if not dem_dates:   # if no dates given, just use the median flow
+        dem_baseflow = stream_reach.get_median_flow()
+    else:               # if there are dates, use them lol
+        dem_baseflow = stream_reach.get_median_flow_in_range(dem_dates[0], dem_dates[1])
 
-    for row in lhd_df.itertuples(index=True):
-        index = row.Index
-        # skip rows with known base flows
-        if pd.notnull(row.known_baseflow):
-            continue
-
-        lat = row.latitude
-        lon = row.longitude
-        date_range = get_dem_dates(lat, lon)
-
-        if hydrology == "GEOGLOWS":
-            comid = row.LINKNO
-        else:
-            comid = row.reach_id
-            if pd.isnull(comid):
-                comid = get_reach_id(lat, lon)
-                lhd_df.at[index, 'reach_id'] = comid
-
-        dem_baseflow = hi.get_streamflow(hydrology, comid, date_range)
-        lhd_df.at[index, 'known_baseflow'] = dem_baseflow
-        print(f'index: {index} | known baseflow: {dem_baseflow}')
-
-    return lhd_df
+    return dem_baseflow

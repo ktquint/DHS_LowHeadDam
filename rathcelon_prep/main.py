@@ -1,8 +1,10 @@
 import os
 import pandas as pd
+import xarray as xr
 import tkinter as tk
 from tkinter import ttk
 from tkinter import filedialog
+from hydroinformatics import StreamReach
 import create_json as cj, download_dem as dd, download_stream as ds, dem_baseflow as db
 
 
@@ -116,10 +118,38 @@ def create_input_file():
     # add a column with the location of the results folder
     lhd_strm['output_dir'] = results_folder
     lhd_strm.to_csv(lhd_csv, index=False)
-    # add a column with the streamflow when the lidar data was collected
-    lhd_baseflow = db.add_known_baseflow(lhd_strm, hydrology)
+
+    # add a columns with baseflow and fatality flows....
+    s3_path = 's3://noaa-nwm-retrospective-2-1-zarr-pds/chrtout.zarr'
+    ds_nwm = xr.open_zarr(s3_path, consolidated=True, storage_options={"anon": True})
+
+    if hydrology == "GEOGLOWS":
+        if 'geoglows_baseflow' not in lhd_strm.columns:
+            lhd_strm['geoglows_baseflow'] = None
+    elif hydrology == "National Water Model":
+        if 'nwm_baseflow' not in lhd_strm.columns:
+            lhd_strm['nwm_baseflow'] = None
+    else:
+        lhd_strm['usgs_baseflow'] = None
+
+    for index, row in lhd_dem.iterrows():
+        lat = row['latitude']
+        lon = row['longitude']
+
+        stream_reach = StreamReach(lat, lon, hydrology, geoglows_streams="E:/TDX_HYDRO/streams.gpkg",
+                                   nwm_ds=ds_nwm)
+        baseflow = db.estimate_dem_baseflow(stream_reach)
+
+        if hydrology == "GEOGLOWS":
+            lhd_strm.at[index, 'geoglows_baseflow'] = baseflow
+        elif hydrology == "National Water Model":
+            lhd_strm.at[index, 'nwm_baseflow'] = baseflow
+        else:
+            lhd_strm.at[index, 'usgs_baseflow'] = baseflow
+
+
     # a little convoluted, but we need a .csv for rathcelon to read
-    lhd_baseflow.to_csv(lhd_csv, index=False)
+    lhd_strm.to_csv(lhd_csv, index=False)
 
     json_loc = json_entry.get()
     cj.rathcelon_input(lhd_csv, json_loc)

@@ -6,21 +6,23 @@ the cross-sections of the low-head dams.
 import numpy as np
 from scipy.optimize import fsolve
 
-g = 9.81 # grav. const.
+
+def weir_coeff(x):
+    return 0.611 + 0.075 * x
 
 
-def weir_eq(H, P, q):
+def weir_eq(H, P, q, g=9.81):
     """
     H = head (m)
     P = dam height (m)
     q = unit discharge (m**2/s)
     """
-    return (2 / 3) * (0.611 + 0.075 * (H / P)) * np.sqrt(2 * g) * H ** (3/2) - q
+    x = H / P
+    return (2 / 3) * weir_coeff(x) * np.sqrt(2 * g) * H ** (3/2) - q
 
 
 def Fr_eq(Fr, x):
-    # x = H/P
-    A = (9 / (4 * (0.611 + 0.075 * x)**2)) * 0.5 * Fr**2
+    A = (9 / (4 * weir_coeff(x)**2)) * 0.5 * Fr**2
     term1 = A**(1/3) * (1 + 1/x)
     term2 = 0.5 * Fr**2 * (1 + 0.1/x)
     return 1 - term1 + term2
@@ -28,6 +30,23 @@ def Fr_eq(Fr, x):
 
 # noinspection PyTypeChecker
 def compute_flip_and_conjugate(Q, L, P):
+    """
+        Computes flip bucket depth (y_flip) and conjugate depth (y2) for a low-head dam.
+
+        Parameters:
+        Q : float
+            Total discharge (m³/s)
+        L : float
+            Crest width (m)
+        P : float
+            Dam height (m)
+
+        Returns:
+        y_flip : float
+            Flip bucket depth (m)
+        y_2 : float
+            Conjugate depth (m)
+    """
     # print(Q, L, P)
     q = Q / L
     H = fsolve(weir_eq, x0=1.0, args=(P, q))[0] # x0 is initial guess for H
@@ -42,15 +61,20 @@ def compute_flip_and_conjugate(Q, L, P):
     return y_flip, y_2
 
 
-def dam_height(Q, b, delta_wse, y_t, delta_z=0):
+def dam_height(Q, b, delta_wse, y_t, delta_z=0, g=9.81):
     """
-        eq.1: P = delta_wse - H + y_t + dela_z
+        Using the equations provided below,
+        we'll estimate height of the low-head dam, P,
+        as defined in Fig. 1
+
+        eq.1: P = delta_wse - H + y_t + delta_z
         ... but we need to find H
-        also—all these calcs are in metric units
 
         eq.2: q = (2/3) * C_w * np.sqrt(2 * g) * H**(3/2)
               where,
               C_w = 0.611 + 0.075 * H/P
+
+        also—all these calcs are in metric units
     """
 
     # constant terms
@@ -61,8 +85,8 @@ def dam_height(Q, b, delta_wse, y_t, delta_z=0):
 
     # solve for q in terms of H
     def func(H):
-        if H >= D:  # avoid division by zero or negative P
-            return 1e6
+        if H >= D:
+            raise ValueError("Invalid flow conditions: H exceeds pressure head.")
         lhs = q / A
         rhs = 0.611 * H ** (3 / 2) + 0.075 * H ** (5 / 2) / (D - H)
         return lhs - rhs
@@ -74,4 +98,19 @@ def dam_height(Q, b, delta_wse, y_t, delta_z=0):
 
     # plug H into eq.1
     P = D - H_sol
-    return round(P, 3)
+    return P
+
+
+# --------------------------------------------------- APPENDIX ------------------------------------------------------- #
+#
+# ‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾\
+#                 H    \
+#               /‾‾‾\   \
+#   Y_U         |    \   \          ~‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾ Y_T
+#               |     \   \       ~ -----------------------------------------
+#               | P    \   ‾‾‾‾‾‾        Y_2
+# ‾‾‾‾‾‾‾‾‾‾‾‾‾‾|       \    Y_1                _____________________________
+#               |        ‾‾‾‾‾‾‾|--------------/                            | ΔZ
+#               |               |                                           |
+#               ‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+#              Fig.1 Depths upstream and downstream of low-head dam.

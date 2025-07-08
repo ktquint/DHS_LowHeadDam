@@ -278,69 +278,53 @@ class Dam:
 
 
         # fatality dates and fatal flows
-
-        date_string = id_row['fatality_dates'].iloc[0]
-        dates = date_string.strip("[]").split(", ")
-
-        formatted_dates = []
-
-        for date in dates:
-            try:
-                # Try converting full date (MM/DD/YYYY → YYYY-MM-DD)
-                formatted_date = pd.to_datetime(date.strip(), format="%m/%d/%Y").strftime("%Y-%m-%d")
-            except ValueError:
-                try:
-                    # Try converting partial date (MM/YYYY → YYYY-MM)
-                    _ = pd.to_datetime(date.strip(), format="%m/%Y").strftime("%Y-%m")
-                    continue
-                except ValueError:
-                    # If neither format applies, keep original
-                    continue
-
-            formatted_dates.append(formatted_date)
-
-        self.fatality_dates = formatted_dates
-        print(self.fatality_dates)
+        date_str = id_row['fatality_dates'].values[0]
+        self.fatality_dates = ast.literal_eval(date_str)
+        print(self.fatality_dates) # dates should be in the form "YYYY-mm-dd"
 
         # ----------------------------------------- HYDROLOGIC INFORMATION ------------------------------------------- #
 
-        fatal_flows = []
+        self.fatal_flows = []
+
+        ## Establish the COMID ##
         if hydrology == "GEOGLOWS":
             # establish which values to use as the comid
             self.comid = id_row['LINKNO'].values[0]
 
         elif hydrology == "USGS":
-            fatal_flows = id_row['USGS_fatal_flows'].apply(ast.literal_eval).values[0]
-            self.fatal_flows = [Q / 35.315 for Q in fatal_flows]
+            flow_cfs = id_row['USGS_fatal_flows'].apply(ast.literal_eval).values[0]
+            self.fatal_flows = [Q / 35.315 for Q in flow_cfs]
 
         else:   # NWM
             self.comid = id_row['reach_id'].values[0]
 
-        # check to see if we already have a fatal flows column
+
+        ### Fill out the fatal_flows attr. ###
         if 'fatal_flows' not in lhd_df.columns:
             lhd_df['fatal_flows'] = None
 
         # if the fatal_flows column is empty in the row we'll populate it
         elif pd.isna(id_row['fatal_flows'].values[0]):
-
             for date in self.fatality_dates:
                 flow_value = hi.get_streamflow(hydrology, self.comid, [date, date])
 
                 try:
                     # convert the np.float to a float
-                    float_flow = float(flow_value)
-                    fatal_flows.append(float_flow)
+                    flow_float = float(flow_value)
+                    self.fatal_flows.append(flow_float)
 
                 except (ValueError, TypeError):
                     continue
 
-            self.fatal_flows = fatal_flows
             # if we're getting them for the first time we'll save them to the csv
             lhd_df.loc[lhd_df['ID'] == self.id, 'fatal_flows'] = str(self.fatal_flows)
 
         # if there are already values we'll add them to our local variable
         else:
             self.fatal_flows = ast.literal_eval(id_row.at[0, 'fatal_flows'])
+
+
+        # ---------------------------------- READ IN VDT + CROSS-SECTION INFO ---------------------------------------- #
 
         # find attributes based on the vdt and xs files
         local_loc = os.path.join(results_dir, "VDT", f"{str(self.id)}_Local_CurveFile.dbf")
@@ -445,10 +429,6 @@ class Dam:
 
         # update the csv file
         lhd_df.to_csv(lhd_csv, index=False)
-
-
-    def set_dam_height(self, P):
-        self.P = P
 
 
     def plot_rating_curves(self):
