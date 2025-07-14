@@ -45,19 +45,24 @@ def assign_flowlines(lhd_df, gpkg_dir, data_source):
         lhd_df["flowline"] = None
         base_url = 'geoglows-v2/hydrography/'
         gpkg_set = set()
-        linkno_df = pd.read_csv("../list_of_linkno.csv")
+
+        metadata_df = pd.read_parquet("C:/Users/ki87ujmn/PycharmProjects/DHS_LowHeadDam/geoglows_metadata.parquet")
+        metadata_df['LINKNO'] = metadata_df['LINKNO'].astype(int)
 
         print("Starting Hydrography Download Process...")
 
         for index, row in lhd_df.iterrows():
             linkno = row['LINKNO'] # get the linkno for each dam
-            gpkg_name = find_col_name(linkno_df, linkno) # find the gpkg with the linkno
-            if gpkg_name:
-                 gpkg_path = f"{gpkg_dir}/{gpkg_name}.gpkg"
-                 lhd_df.at[index, 'flowline'] = str(gpkg_path)  # save the gpkg path for each dam
-                 gpkg_set.add(gpkg_path)
-            else:
-                 print(f"LINKNO {linkno} not found in linkno_df")
+
+            # Lookup VPUCode for this linkno
+            row = metadata_df[metadata_df['LINKNO'] == linkno]
+            if row.empty:
+                raise ValueError(f"linkno {linkno} not found in metadata.")
+
+            vpu_code = str(row.iloc[0]['VPUCode']).zfill(2)  # Ensure leading 0s
+
+            gpkg_path = os.path.join(gpkg_dir, f"streams_{vpu_code}.gpkg")
+            gpkg_set.add(gpkg_path)
 
         # Save updated DataFrame back to CSV
         # lhd_df.to_csv(lhd_df_path, index=False)

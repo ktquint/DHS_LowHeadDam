@@ -1,18 +1,20 @@
 import io
+import os
 import ast
 import geoglows
 import requests
 import numpy as np
 import pandas as pd
 import xarray as xr
-import seaborn as sns
 import geopandas as gpd
+from datetime import date
 from math import cos, radians
 import matplotlib.pyplot as plt
-from datetime import datetime, date
-from shapely.geometry import Point, box
+from typing import List, Optional
+from shapely.geometry import Point, box, LineString
 
 
+# eventually i'll need a real api key i think... talk to sujan about that
 nwm_api_key = "AIzaSyC4BXXMQ9KIodnLnThFi5Iv4y1fDR4U1II"
 # import os
 # nwm_api_key = (os.getenv('NWM_API_KEY'))
@@ -21,7 +23,9 @@ nwm_api_key = "AIzaSyC4BXXMQ9KIodnLnThFi5Iv4y1fDR4U1II"
 
 
 def make_bbox(latitude, longitude, distance_deg=0.5):
-    """Creates a bounding box around a point (lat, lon) ±distance_deg degrees."""
+    """
+        creates a bounding box around a point (lat, lon) ±distance_deg degrees.
+    """
     lat_min = latitude - distance_deg
     lat_max = latitude + distance_deg
     lon_min = longitude - distance_deg / cos(radians(latitude))  # adjust for longitude convergence
@@ -30,7 +34,9 @@ def make_bbox(latitude, longitude, distance_deg=0.5):
 
 
 def haversine(lat1, lon1, lat2, lon2):
-    """Computes approximate distance between two points (km)."""
+    """
+        computes approximate distance (km) between two points.
+    """
     from math import radians, sin, cos, sqrt, atan2
     R = 6371.0  # Earth radius in km
     d_lat = radians(lat2 - lat1)
@@ -41,168 +47,237 @@ def haversine(lat1, lon1, lat2, lon2):
 
 
 class StreamReach:
-    def __init__(self, lhd_id, latitude, longitude, data_source, geoglows_streams=None, nwm_ds=None, streamflow=True):
+    """
+        this class represents a stream reach.
+
+        characteristics of a stream reach include:
+            - geometry (the hydrography)
+            - streamflow (discharge)
+            - time (corresponding to streamflow)
+            for our purposes we also want:
+                - ID (which LHD does the stream reach correspond to?)
+                - data sources (where does the geometry and streamflow come from?)
+
+        to find the aforementioned information, we need:
+            - lhd_id: the ID for this stream's LHD
+            - latitude/longitude: where the LHD is located
+            - data_sources: how do we want to estimate geometry and streamflow info
+            - geoglows_streams: location of .gpkg containing GEOGLOWS hydrography
+            - nwm_ds: zarr database that contains NWM info
+            - streamflow (bool): You want to assign streamflow values to the stream reach
+            - geometry (bool): You want to assign hydrography geometry to the stream reach
+    """
+    def __init__(self, lhd_id, latitude, longitude, data_sources, geoglows_streams=None,
+                 nwm_ds=None, streamflow=True, geometry=True):
         self.id = lhd_id
         self.latitude = latitude
         self.longitude = longitude
-        self.data_source = data_source
+        self.data_sources = data_sources
         # if using geoglows, we'll need a path to the stream gpkg
         self.geoglows_streams = geoglows_streams
         # if using nwm, we'll use a preloaded ds
         self.nwm_ds = nwm_ds
         # if true we'll get streamflow info
         self.streamflow = streamflow
+        self.geometry = geometry
 
-        self.df = None
         self.flow_cms = None
         self.time = None
         self.name = None
 
-        # all the different comid's
-        self.reach_id = None
-        self.site_no = None
+        # GEOGLOWS Info
+        self.geoglows_metadata = None
+        self.geoglows_time = None
+        self.geoglows_flow = None
+        self.geoglows_geom = None
         self.linkno = None
-        # the comid we'll print later
-        self.comid = None
+
+        # NWM Info
+        self.nwm_time = None
+        self.nwm_flow = None
+        self.nwm_geom = None
+        self.reach_id = None
+
+        # USGS Info
+        self.usgs_time = None
+        self.usgs_flow = None
+        self.usgs_lat = None
+        self.usgs_lon = None
+        self.site_no = None
+        self.usgs_geom =None
 
         self._load_data()
 
-    @staticmethod
-    def _format_dates(date_list):
-        formatted = []
-        for d in date_list:
-            try:
-                dt = datetime.strptime(d.strip(), "%Y-%m-%d")
-                formatted.append(dt.strftime("%Y-%m-%dT%H:%M:%S"))
-            except ValueError:
-                continue
-        return formatted
 
     def _load_data(self):
-        if self.data_source == "GEOGLOWS":
+        valid_sources = False
+        metadata_path = "./geoglows_metadata.parquet"
+
+        if "GEOGLOWS" in self.data_sources:
+            if not os.path.isfile(metadata_path):
+                metadata_df = geoglows.data.metadata_table()
+                metadata_df.to_parquet(metadata_path)
+            self.geoglows_metadata = pd.read_parquet(metadata_path)
             self._load_geoglows()
-            self.comid = self.linkno
-        elif self.data_source == "National Water Model":
+            valid_sources = True
+
+        if "National Water Model" in self.data_sources:
             self._load_nwm()
-            self.comid = self.reach_id
-        elif self.data_source == "USGS":
+            valid_sources = True
+
+        if "USGS" in self.data_sources:
             self._load_usgs()
-            self.comid = self.site_no
-        else:
+            valid_sources = True
+
+        if not valid_sources:
             raise ValueError("Unsupported data source. Use 'GEOGLOWS', 'National Water Model', or 'USGS'.")
 
-        if self.df is not None and not self.df.empty:
-            self.df = self.df.sort_values('time')
-            self.flow_cms = self.df['flow_cms']
-            self.time = self.df['time']
 
     def _load_geoglows(self):
-        # first we need to find the linkno based on the closest streamline
+        # first we need to find the linkno based on the closest, highest order streamline
         # we'll use a bounding box so we don't have to load the whole thing
-        # ... it seems like this gets less accurate the larger the bounding box...
         bbox_coords = make_bbox(self.latitude, self.longitude, 0.002)
         bbox_geom = box(*bbox_coords)
         gdf = gpd.read_file(self.geoglows_streams, bbox=bbox_geom)
         print("finished reading in the geoglows streamlines")
         dam_point = Point(self.latitude, self.longitude)
 
-        # find the nearest streamline to our dam
+        # calculate the distance to all streamlines in the bounding box
         gdf["distance"] = gdf.geometry.distance(dam_point)
-        # print(gdf[['LINKNO', 'distance']].head())
-        nearest = gdf.loc[gdf["distance"].idxmin()]
 
-        # save the comid
+        # of the closest streams, we only want the ones of the highest order
+        max_strm_order = gdf['strmOrder'].max()
+        highest_order_streams = gdf[gdf['strmOrder'] == max_strm_order]
+
+        # now we'll find the closest stream
+        nearest = highest_order_streams.loc[highest_order_streams['distance'].idxmin()]
+
+        # save the linkno
         self.linkno = nearest["LINKNO"]
 
-        comid = int(self.linkno)
-        df = geoglows.data.retrospective(river_id=comid, bias_corrected=True)
-        df.index = pd.to_datetime(df.index)
+        if self.geometry:
+            self.geoglows_geom = gpd.GeoDataFrame([nearest], crs=gdf.crs)
+
         if self.streamflow:
-            self.df = df.reset_index().rename(columns={"index": "time", comid: "flow_cms"})
+            df = geoglows.data.retrospective(river_id=self.linkno, bias_corrected=True)
+            df.index = pd.to_datetime(df.index)
+
+            df = df.reset_index().rename(columns={"index": "time", int(self.linkno): "flow_cms"})
+            df = df.sort_values('time')
+
+            # remove any negative numbers
+            df = df[df['flow_cms'] >= 0]
+
+            self.geoglows_flow = df['flow_cms']
+            self.geoglows_time = df['time']
+
 
     def _load_nwm(self):
         r = requests.get(f"https://nwm-api.ciroh.org/geometry?lat={self.latitude}&lon={self.longitude}"
                          f"&output_format=csv&key={nwm_api_key}")
+
         # Check for successful response (HTTP status code 200)
         if r.status_code == 200:
             # Convert API response to pandas DataFrame
             df = pd.read_csv(io.StringIO(r.text))
             # Extract first (and only) reach ID from the response
             # print(df['station_id'].values)
-            reach_id = df['station_id'].values[0]
+            self.reach_id = df['station_id'].values[0]
         else:
             # Raise error if API request fails
             raise requests.exceptions.HTTPError(r.text)
 
-        self.reach_id = reach_id
+        if self.geometry:
+            url = f"https://nwm-api.ciroh.org/geometry?comids={self.reach_id}&key={nwm_api_key}"
+            response = requests.get(url)
+
+            if response.status_code != 200:
+                raise ValueError(f"NWM API error {response.status_code}: {response.text}")
+
+            data = response.json()[0]
+            coords = data['geometry'].replace("LINESTRING(", "").replace(")", "")
+            coord_pairs = [(float(x.split(" ")[0]), float(x.split(" ")[1])) for x in coords.split(", ")]
+            linestring = LineString(coord_pairs)
+
+            gdf = gpd.GeoDataFrame({'reach_id': [self.reach_id], 'source': ['NWM']}, geometry=[linestring], crs="EPSG:4326")
+            self.nwm_geom = gdf
+
         if self.streamflow:
-            stream = self.nwm_ds['streamflow'].sel(feature_id=int(self.reach_id))
-            valid_start = "1979-02-01T00:00:00"
-            stream = stream.sel(time=slice(valid_start, None))
+            # Select the feature_id and slice the time to the valid range
+            stream = self.nwm_ds['streamflow'].sel(
+                feature_id=int(self.reach_id),
+                time=slice("1979-02-01", None))
 
-            computed_stream = stream.compute()  # this loads the data into memory before converting to data_frame
+            # Compute the selection and convert to a pandas DataFrame
+            df = stream.compute().to_dataframe()
 
-            df = computed_stream.to_dataframe().reset_index()
+            # Rename the column and ensure the index is a datetime type
             df = df.rename(columns={"streamflow": "flow_cms"})
-            self.df = df[['time', 'flow_cms']].copy()
-            self.df['time'] = pd.to_datetime(self.df['time'])
+            df.index = pd.to_datetime(df.index)
+
+            # Reset the index to make 'time' a column and assign attributes
+            df = df.reset_index()
+            # remove any negative numbers
+            df = df[df['flow_cms'] >= 0]
+
+            self.nwm_flow = df['flow_cms']
+            self.nwm_time = df['time']
+
 
     def _load_usgs(self):
         # create bounding box coordinates
         bbox = make_bbox(self.latitude, self.longitude, 0.3)
 
-        # Request sites with siteType=ST (surface water sites)
+        # Request sites with siteType=ST (surface water sites) that have instantaneous data
         bbox_url = (
             f"https://waterservices.usgs.gov/nwis/site/?format=rdb"
             f"&bBox={bbox[0]:.7f},{bbox[1]:.7f},{bbox[2]:.7f},{bbox[3]:.7f}"
-            f"&siteType=ST"
+            f"&siteType=ST&hasDataTypeCd=dv"
         )
         response = requests.get(bbox_url)
         data = response.text
 
-        # Read data into DataFrame
+        # Read tab-separated data, skipping header comments
         response_df = pd.read_csv(io.StringIO(data), sep="\t", comment="#", skip_blank_lines=True)
-
-        # Convert lat/lon columns to numeric
         response_df['dec_lat_va'] = pd.to_numeric(response_df['dec_lat_va'], errors='coerce')
         response_df['dec_long_va'] = pd.to_numeric(response_df['dec_long_va'], errors='coerce')
-
-        # Drop rows with missing coordinates
         response_df = response_df.dropna(subset=['dec_lat_va', 'dec_long_va'])
 
-        # Filter to short site numbers (likely surface water gages)
+        # Filter for likely stream gages and calculate distance
         stream_df = response_df[response_df['site_no'].astype(str).str.len() <= 10].copy()
-
-        # Now find the closest among these
         stream_df['distance_km'] = stream_df.apply(
             lambda row: haversine(self.latitude, self.longitude, row['dec_lat_va'], row['dec_long_va']),
             axis=1
         )
-        #
-        # sorted_streams = stream_df.sort_values(by='distance_km', ascending=True).head()
-        #
-        # print(sorted_streams[['station_nm', 'site_no', 'distance_km']])
 
+        # Prioritize sites with "river" in the name, with a fallback
         river_df = stream_df[stream_df['station_nm'].str.contains(r'river| R ', case=False, na=False)]
-        # print(f"This info is for LHD No. {self.id}")
-        # print(river_df['station_nm'].head())
-        # print(stream_df.sort_values(by='distance_km', ascending=True).head())
+
         if river_df.empty:
             nearest_site = stream_df.loc[stream_df['distance_km'].idxmin()]
         else:
             nearest_site = river_df.loc[river_df['distance_km'].idxmin()]
-        print(nearest_site[['station_nm', 'site_no', 'distance_km']])
+
         self.name = nearest_site['station_nm']
-
-        # print("Site Latitude:", nearest_site['dec_lat_va'])
-        # print("Site Longitude:", nearest_site['dec_long_va'])
-
         self.site_no = nearest_site['site_no']
+
+        if self.geometry:
+            # Store the lat/lon for the site
+            self.usgs_lat = nearest_site['dec_lat_va']
+            self.usgs_lon = nearest_site['dec_long_va']
+
+            # Create a GeoDataFrame for the single point location of the USGS site
+            self.usgs_geom = gpd.GeoDataFrame(
+                [{'site_no': self.site_no, 'station_nm': self.name}],
+                geometry=[Point(self.usgs_lon, self.usgs_lat)],
+                crs="EPSG:4326"
+            )
 
         if self.streamflow:
             start_date = '1850-01-01'
             end_date = date.today().isoformat()
 
+            # Fetch daily values for discharge (00060)
             url = (
                 f"https://waterservices.usgs.gov/nwis/dv/?sites={self.site_no}"
                 f"&parameterCd=00060&startDT={start_date}&endDT={end_date}&format=json"
@@ -210,134 +285,182 @@ class StreamReach:
             response = requests.get(url)
             data = response.json()
 
+            # Check for empty time series response
             if not data['value']['timeSeries']:
                 print(f"No USGS streamflow data found for site {self.site_no}.")
-                self.df = pd.DataFrame()
                 return
 
-            records = []
-            for ts in data['value']['timeSeries']:
-                for value in ts['values'][0]['value']:
-                    records.append({
-                        'time': value['dateTime'][:10],
-                        'flow_cfs': float(value['value']) if value['value'] != '' else None
-                    })
+            try:
+                df = pd.json_normalize(data['value']['timeSeries'][0]['values'][0]['value'])
+                df = df.rename(columns={'dateTime': 'time', 'value': 'flow_cfs'})
+                df['flow_cfs'] = pd.to_numeric(df['flow_cfs'], errors='coerce')
 
-            df = pd.DataFrame(records)
-            df['flow_cms'] = df['flow_cfs'].apply(lambda x: x / 35.315 if pd.notnull(x) else None)
-            df['time'] = pd.to_datetime(df['time'])
-            self.df = df[['time', 'flow_cms']]
+                # remove any negative numbers
+                df = df[df['flow_cfs'] >= 0]
 
-    def get_median_flow(self):
-        if self.flow_cms is not None and not self.flow_cms.empty:
-            return float(self.flow_cms.median())
-        return None
+                self.usgs_flow = df['flow_cfs'] / 35.315
+                self.usgs_time = pd.to_datetime(df['time'])
+            except (KeyError, IndexError):
+                print(f"Could not parse streamflow JSON for site {self.site_no}.")
 
-    def get_median_flow_in_range(self, start_date, end_date):
+
+    def get_median_flow(self, source):
+        if source == "GEOGLOWS":
+            return float(self.geoglows_flow.median())
+        elif source == "USGS":
+            return float(self.usgs_flow.median())
+        else:
+            return float(self.nwm_flow.median())
+
+
+    def get_median_flow_in_range(self, start_date, end_date, source):
         """
-        Returns the median streamflow (m³/s) for the given date range as a float.
+            returns the median streamflow (m³/s) for the given date range as a float.
         """
-        if self.df is None or self.df.empty:
-            return None
-
         start_date = pd.to_datetime(start_date)
         end_date = pd.to_datetime(end_date)
 
-        mask = (self.df['time'] >= start_date) & (self.df['time'] <= end_date)
-        flows_in_range = self.df.loc[mask]['flow_cms']
+        if source == "GEOGLOWS":
+            df = pd.DataFrame({
+                'time': self.geoglows_time,
+                'flow_cms': self.geoglows_flow,
+            })
 
-        if not flows_in_range.empty:
-            return float(flows_in_range.median())
-        return None
+        elif source == "USGS":
+            df = pd.DataFrame({
+                'time': self.usgs_time,
+                'flow_cms': self.usgs_flow,
+            })
 
-    def get_flows_in_range(self, start_date, end_date=None):
-        """
-        Returns a DataFrame of streamflow (m³/s) for the given date or date range.
-        If not found, returns an empty DataFrame.
-        """
-        if self.df is None or self.df.empty:
-            return pd.DataFrame()
-
-        start_date = pd.to_datetime(start_date)
-        if end_date:
-            end_date = pd.to_datetime(end_date)
-            mask = (self.df['time'] >= start_date) & (self.df['time'] <= end_date)
         else:
-            mask = self.df['time'].dt.date == start_date.date()
+            df = pd.DataFrame({
+                'time': self.nwm_time,
+                'flow_cms': self.nwm_flow,
+            })
 
-        return self.df.loc[mask]
+        df = df.set_index('time')
+        filtered_df = df.loc[start_date:end_date]
+
+        if filtered_df.empty:
+            return np.nan
+        else:
+            median_flow = filtered_df['flow_cms'].median()
+            return float(median_flow)
 
 
-    def get_flow_on_date(self, target_date):
+    def get_flow_on_date(self, target_date, source):
         """
-        Returns the streamflow (m³/s) for the given date as a float.
-        If not found, returns None.
+            returns the streamflow (m³/s) for the given date as a float.
+            if no flow is associated with the date, it returns None.
         """
-        if self.df is None or self.df.empty:
+        time_data, flow_data = None, None
+        if source == "GEOGLOWS":
+            time_data = self.geoglows_time
+            flow_data = self.geoglows_flow
+
+        elif source == "USGS":
+            time_data = self.usgs_time
+            flow_data = self.usgs_flow
+
+        elif source == "National Water Model":
+            time_data = self.nwm_time
+            flow_data = self.nwm_flow
+
+        if time_data is None or flow_data is None:
             return None
 
+        df = pd.DataFrame({
+            'time': time_data,
+            'flow_cms': flow_data,
+        })
+
         target_date = pd.to_datetime(target_date)
-        match = self.df[self.df['time'].dt.date == target_date.date()]
+        match = df[df['time'].dt.date == target_date.date()]
 
         if not match.empty:
             return float(match.iloc[0]['flow_cms'])
-        return None
 
-    def plot_hydrograph(self):
-        if self.df is None or self.df.empty:
-            print("No streamflow data available.")
-            return
 
-        plt.figure(figsize=(12, 6))
-        plt.plot(self.time, self.flow_cms, linewidth=1)
-        plt.title(f"Streamflow Hydrograph - {self.data_source} ID {self.comid}")
-        plt.xlabel("Date")
-        plt.ylabel("Streamflow (m³/s)")
-        plt.grid(True)
-        plt.tight_layout()
-        plt.show()
+    def plot_hydrographs(self):
+        # let's go through each source and plot a hydrograph
+        for source in self.data_sources:
+            plt.figure(figsize=(12, 6))
+            if source == "GEOGLOWS":
+                comid = self.linkno
+                time = self.geoglows_time
+                flow = self.geoglows_flow
+            elif source == "USGS":
+                comid = self.site_no
+                time = self.usgs_time
+                flow = self.usgs_flow
+            else: # source == NWM
+                comid = self.reach_id
+                time = self.nwm_time
+                flow = self.nwm_flow
 
-    def plot_fdc(self):
-        if self.flow_cms is None or self.flow_cms.empty:
-            print("No flow data to plot FDC.")
-            return
+            if time is not None and flow is not None:
+                plt.plot(time, flow, linewidth=1)
+                plt.title(f"Streamflow Hydrograph - {source} ID {comid}")
+                plt.xlabel("Date")
+                plt.ylabel("Streamflow (m³/s)")
+                plt.grid(True)
+                plt.tight_layout()
+                plt.show()
 
-        flow_data = self.flow_cms.dropna()
-        sorted_flows = np.sort(flow_data)[::-1]
-        ranks = np.arange(1, len(sorted_flows) + 1)
-        exceedance = 100 * ranks / (len(sorted_flows) + 1)
-
+    def plot_fdcs(self):
+        # let's go through each source and plot a hydrograph
         plt.figure(figsize=(10, 6))
-        plt.plot(exceedance, sorted_flows)
-        plt.xscale('linear')
-        plt.yscale('log')
-        plt.title(f"Flow Duration Curve - {self.data_source} ID {self.comid}")
-        plt.xlabel("Exceedance Probability (%)")
-        plt.ylabel("Streamflow (m³/s)")
-        plt.grid(True, which="both", linestyle='--')
-        plt.tight_layout()
-        plt.show()
+        for source in self.data_sources:
+            if source == "GEOGLOWS":
+                comid = self.linkno
+                flow_data = self.geoglows_flow
+            elif source == "USGS":
+                comid = self.site_no
+                flow_data = self.usgs_flow
+            else: # source == NWM
+                comid = self.reach_id
+                flow_data = self.nwm_flow
+
+            if flow_data is not None:
+                flow_data = flow_data.dropna()
+                sorted_flows = np.sort(flow_data)[::-1]
+                ranks = np.arange(1, len(sorted_flows) + 1)
+                exceedance = 100 * ranks / (len(sorted_flows) + 1)
+
+                plt.plot(exceedance, sorted_flows)
+                plt.xscale('linear')
+                plt.yscale('log')
+                plt.title(f"Flow Duration Curve - {source} ID {comid}")
+                plt.xlabel("Exceedance Probability (%)")
+                plt.ylabel("Streamflow (m³/s)")
+                plt.grid(True, which="both", linestyle='--')
+                plt.tight_layout()
+                plt.show()
 
 
-def compare_hydrographs(reaches):
+def compare_hydrographs(reach):
+    """
+        plots hydrographs from multiple data sources for a given reach.
+    """
     plt.figure(figsize=(12, 6))
 
-    data_sources = []
-    name = None
-    lhd_id = None
+    # Use a dictionary to map data sources to their attributes
+    source_map = {
+        "GEOGLOWS": (reach.geoglows_time, reach.geoglows_flow, reach.linkno),
+        "USGS": (reach.usgs_time, reach.usgs_flow, reach.site_no),
+        "National Water Model": (reach.nwm_time, reach.nwm_flow, reach.reach_id),
+    }
 
-    for reach in reaches:
-        data_sources.append(reach.data_source)
-        plt.plot(reach.time, reach.flow_cms, label=f"{reach.data_source} ({reach.comid})")
+    for source in reach.data_sources:
+        if source in source_map:
+            time, flow, data_id = source_map[source]
 
-        if reach.data_source == "USGS":
-            name = reach.name
-            lhd_id = reach.id
+            if time is not None and flow is not None:
+                plt.plot(time, flow, label=f"{source} ({data_id})")
 
-    if "USGS" in data_sources:
-        plt.title(f"Hydrograph Comparison for {name} (LHD No. {lhd_id})")
-    else:
-        plt.title(f"Hydrograph Comparison")
+    # Set title based on whether USGS data was plotted
+    title_name = reach.name if "USGS" in reach.data_sources else "Hydrograph Comparison"
+    plt.title(f"{title_name} (LHD No. {reach.id})")
 
     plt.xlabel("Date")
     plt.ylabel("Streamflow (m³/s)")
@@ -347,32 +470,43 @@ def compare_hydrographs(reaches):
     plt.show()
 
 
-def compare_fdcs(reaches):
+def _calculate_fdc(flow_data):
+    """
+        helper function to calculate FDC.
+    """
+    flow_data = flow_data.dropna()
+    sorted_flows = np.sort(flow_data)[::-1]
+    ranks = np.arange(1, len(sorted_flows) + 1)
+    exceedance = 100 * ranks / (len(sorted_flows) + 1)
+    return exceedance, sorted_flows
+
+
+def compare_fdcs(reach):
+    """
+        plots FDCs from multiple data sources for a given reach.
+    """
     plt.figure(figsize=(10, 6))
 
-    data_sources = []
-    name = None
-    lhd_id = None
+    # Use a dictionary to map data sources to their attributes
+    source_map = {
+        "GEOGLOWS": (reach.geoglows_flow, reach.linkno),
+        "USGS": (reach.usgs_flow, reach.site_no),
+        "National Water Model": (reach.nwm_flow, reach.reach_id),
+    }
 
-    for reach in reaches:
-        data_sources.append(reach.data_source)
-        flow_data = reach.flow_cms.dropna()
-        sorted_flows = np.sort(flow_data)[::-1]
-        ranks = np.arange(1, len(sorted_flows) + 1)
-        exceedance = 100 * ranks / (len(sorted_flows) + 1)
+    for source in reach.data_sources:
+        if source in source_map:
+            flow, data_id = source_map[source]
 
-        plt.plot(exceedance, sorted_flows, label=f"{reach.data_source} ({reach.comid})")
-        if reach.data_source == "USGS":
-            name = reach.name
-            lhd_id = reach.id
+            if flow is not None:
+                # Use the helper function for FDC calculation
+                exceedance, sorted_flows = _calculate_fdc(flow)
+                plt.plot(exceedance, sorted_flows, label=f"{source} ({data_id})")
 
-    if "USGS" in data_sources:
-        plt.title(f"FDC Comparison for {name} (LHD No. {lhd_id})")
-    else:
-        plt.title(f"Flow Duration Curve Comparison")
+    # Set title
+    title_name = reach.name if "USGS" in reach.data_sources else "Flow Duration Curve"
+    plt.title(f"{title_name} Comparison (LHD No. {reach.id})")
 
-
-    plt.xscale('linear')
     plt.yscale('log')
     plt.xlabel("Exceedance Probability (%)")
     plt.ylabel("Streamflow (m³/s)")
@@ -382,222 +516,200 @@ def compare_fdcs(reaches):
     plt.show()
 
 
-def plot_discharge_comparisons(df):
+def create_multilayer_gpkg(
+        gdfs: List[gpd.GeoDataFrame],
+        output_path: str,
+        layer_names: Optional[List[str]] = None
+) -> None:
     """
-    Creates a faceted bar chart to compare discharge estimates.
-    """
-    # This creates a grid of plots.
-    # Each row is a different dam, and each column is a different date.
-    g = sns.catplot(
-        data=df,
-        kind='bar',
-        x='method',  # Estimation method on the x-axis
-        y='discharge_cms',  # Discharge value on the y-axis
-        col='date',  # A new column of plots for each unique date
-        row='dam_id',  # A new row of plots for each unique dam
-        height=4,
-        aspect=1.2,
-        sharey=False  # Allow y-axis to be different for each plot
-    )
+        Saves a list of GeoDataFrames to a single GeoPackage file, with each
+        GeoDataFrame as its own layer.
 
-    # Improve readability
-    g.set_axis_labels("Estimation Method", "Discharge (m³/s)")
-    g.set_titles(col_template="{col_name}", row_template="{row_name}")
-    g.fig.suptitle('Discharge Estimates on Fatality Dates', y=1.03)
-    plt.tight_layout()
-    plt.show()
+        Args:
+            gdfs (List[gpd.GeoDataFrame]): A list of GeoDataFrames to save.
+            output_path (str): The file path for the output GeoPackage.
+                               Must end with '.gpkg'.
+            layer_names (Optional[List[str]], optional): A list of names for each
+                                                         layer. If not provided,
+                                                         layers will be named
+                                                         'layer_1', 'layer_2', etc.
+                                                         Defaults to None.
+
+        Raises:
+            ValueError: If the output path is not a .gpkg file.
+            ValueError: If the number of layer names does not match the number
+                        of GeoDataFrames.
+            ValueError: If the list of GeoDataFrames is empty.
+    """
+    # --- 1. Input Validation ---
+    if not output_path.lower().endswith('.gpkg'):
+        raise ValueError("Output file path must end with '.gpkg'")
+
+    if not gdfs:
+        raise ValueError("The list of GeoDataFrames cannot be empty.")
+
+    if layer_names:
+        if len(gdfs) != len(layer_names):
+            raise ValueError(
+                "The number of layer names must match the number of GeoDataFrames."
+            )
+    else:
+        # Create default layer names if none are provided
+        layer_names = [f"layer_{i + 1}" for i in range(len(gdfs))]
+
+    # --- 2. Remove Existing File (Optional but Recommended) ---
+    # This ensures you start with a fresh file on each run.
+    if os.path.exists(output_path):
+        os.remove(output_path)
+        print(f"Removed existing file at: {output_path}")
+
+    # --- 3. Write Each GeoDataFrame to a Layer ---
+    print(f"Creating GeoPackage at: {output_path}")
+    for gdf, layer_name in zip(gdfs, layer_names):
+        if not isinstance(gdf, gpd.GeoDataFrame) or gdf.empty:
+            print(f"Warning: Skipping empty or invalid GeoDataFrame for layer '{layer_name}'.")
+            continue
+
+        try:
+            gdf.to_file(output_path, driver="GPKG", layer=layer_name)
+            print(f"  - Successfully wrote layer: '{layer_name}'")
+        except Exception as e:
+            print(f"  - Failed to write layer '{layer_name}'. Error: {e}")
+
+    print("GeoPackage creation complete.")
+
+
+def create_gpkg_from_lists(
+    lists_of_gdfs: List[List[gpd.GeoDataFrame]],
+    output_path: str,
+    layer_names: Optional[List[str]] = None
+) -> None:
+    """
+        Combines lists of GeoDataFrames and saves each combined list as a
+        separate layer in a single GeoPackage file.
+
+        Args:
+            lists_of_gdfs (List[List[gpd.GeoDataFrame]]): A list where each
+                element is another list of GeoDataFrames to be merged.
+            output_path (str): The file path for the output GeoPackage.
+            layer_names (Optional[List[str]], optional): A list of names for each
+                output layer. Defaults to None.
+    """
+    merged_gdfs = []
+    print("--- Merging lists of GeoDataFrames ---")
+    for i, gdf_list in enumerate(lists_of_gdfs):
+        if not gdf_list:
+            print(f"Warning: Inner list at index {i} is empty, skipping.")
+            continue
+
+        # Ensure all elements are GeoDataFrames before concatenating
+        if not all(isinstance(g, gpd.GeoDataFrame) for g in gdf_list):
+            print(f"Warning: Inner list at index {i} contains non-GeoDataFrame elements, skipping.")
+            continue
+
+        # We assume all gdfs in a list share the same CRS and take it from the first one.
+        crs = gdf_list[0].crs
+        # Use pandas.concat to merge the list of GeoDataFrames
+        merged_gdf = gpd.GeoDataFrame(
+            pd.concat(gdf_list, ignore_index=True), crs=crs
+        )
+        merged_gdfs.append(merged_gdf)
+        print(f"Merged list {i+1} into a single GeoDataFrame with {len(merged_gdf)} features.")
+
+    # Now call the original function with the list of merged GeoDataFrames
+    create_multilayer_gpkg(merged_gdfs, output_path, layer_names)
+
 
 
 def main(lhd_csv_path, streams_gpkg_path, ):
     lhd_df = pd.read_csv(lhd_csv_path)
     print("finished reading in the LHD Database...")
 
-    # load the nwm ds once
-    # sources = ["GEOGLOWS", "National Water Model", "USGS"]
-    sources = ["GEOGLOWS", "USGS"]
 
+    sources = ["GEOGLOWS", "USGS", "National Water Model"]
+
+    # load the nwm ds once
     ds = None
     if "National Water Model" in sources:
-        s3_path = 's3://noaa-nwm-retrospective-2-1-zarr-pds/chrtout.zarr'
+        s3_path = 's3://noaa-nwm-retrospective-3-0-pds/CONUS/zarr/chrtout.zarr'
         ds = xr.open_zarr(s3_path, consolidated=True, storage_options={"anon": True})
         print("finished reading the Zarr Dataset...")
 
-    results_list = []
+    comid_list = []
+    fatal_flow_list = [] # flows on fatality dates
+
+    geoglows_gdfs = []
+    usgs_gdfs = []
+    nwm_gdfs = []
 
     for index, row_i in lhd_df.iterrows():
         lat = row_i['latitude']
         lon = row_i['longitude']
         dam_id = row_i['ID']
 
-        # let's make stream reach objects for each source
+        # let's make stream reach objects for each dam location
+        reach = StreamReach(dam_id, lat, lon, sources,
+                            geoglows_streams=streams_gpkg_path, nwm_ds=ds)
 
-        stream_reaches = []
+        comid_list.append({'dam_id': dam_id,
+                           'linkno': reach.linkno,
+                           'reach_id': reach.reach_id,
+                           'site_no': reach.site_no,})
 
-        for source in sources:
-            try:
-                # Create the object as you did before
-                reach = StreamReach(dam_id, lat, lon, source,
-                                    geoglows_streams=streams_gpkg_path, nwm_ds=ds, streamflow=False)
-
-                # Only append the object to the list if it has a non-empty DataFrame
-                stream_reaches.append(reach)
-                results_list.append({'dam_id': dam_id,
-                                     'method': source,
-                                     'comid': reach.comid})
-                print(f"created {source} StreamReach object")
-                # if reach.df is not None and not reach.df.empty:
-                #     stream_reaches.append(reach)
-                #     results_list.append({'dam_id': dam_id,
-                #                          'method': source,
-                #                          'comid': reach.comid})
-                #     print(f"created {source} StreamReach object")
-                # else:
-                #     print(f"INFO: Skipping {source} for point ({lat}, {lon}) due to no data.")
-
-            except Exception as e:
-                print(f"ERROR: Failed to process {source} for point ({lat}, {lon}). Reason: {e}")
+        if reach.geometry:
+            nwm_gdfs.append(reach.nwm_geom)
+            geoglows_gdfs.append(reach.geoglows_geom)
+            usgs_gdfs.append(reach.usgs_geom)
 
         # Only call the comparison functions if you have data to compare
-        # if len(stream_reaches) > 1:
-        #     compare_hydrographs(stream_reaches)
-        #     compare_fdcs(stream_reaches)
-        # elif len(stream_reaches) == 1:
-        #     stream = stream_reaches[0]
-        #     stream.plot_hydrograph()
-        #     stream.plot_fdc()
+        if reach.streamflow:
+            # comparisons
+            compare_hydrographs(reach)
+            compare_fdcs(reach)
 
-        # now let's look at each estimate for flow on the fatality dates
-        # fatality_dates = ast.literal_eval(row_i['fatality_dates'])
-        #
-        # for date_i in fatality_dates:
-        #     # let's look at the flows on these days...
-        #     for stream in stream_reaches:
-        #         flow = stream.get_flow_on_date(date_i)
-        #         if flow is not None:
-        #             results_list.append({'dam_id': dam_id,
-        #                                  'date': pd.to_datetime(date_i),
-        #                                  'method': stream.data_source,
-        #                                  'comid': stream.comid,
-        #                                  'discharge_cms': flow})
-        #
-        #
-        #             print(f"{stream.data_source} Streamflow on {date_i}:")
-        #             print(stream.get_flow_on_date(date_i))
+            # individuals
+            reach.plot_hydrographs()
+            reach.plot_fdcs()
 
-    results_df = pd.DataFrame(results_list)
-    results_df.to_csv("E:/LowHead_Dam_Streamflow.csv", index=False)
+            # now let's look at each estimate for flow on the fatality dates
+            fatality_dates = ast.literal_eval(row_i['fatality_dates'])
 
+            for date_i in fatality_dates:
+                # let's look at the flows on these days...
+                geoglows_flow = None
+                usgs_flow = None
+                nwm_flow = None
+
+                if "GEOGLOWS" in sources:
+                    geoglows_flow = reach.get_flow_on_date(date_i, "GEOGLOWS")
+                if "USGS" in sources:
+                    usgs_flow = reach.get_flow_on_date(date_i, "USGS")
+                if "National Water Model" in sources:
+                    nwm_flow = reach.get_flow_on_date(date_i, "National Water Model")
+
+
+                fatal_flow_list.append({'dam_id': dam_id,
+                                        'date': pd.to_datetime(date_i),
+                                        'geoglows_flow': geoglows_flow,
+                                        'usgs_flow': usgs_flow,
+                                        'nwm_flow': nwm_flow,})
+
+                print(f"GEOGLOWS Streamflow on {date_i}:")
+                print(geoglows_flow)
+                print(f"USGS Streamflow on {date_i}:")
+                print(usgs_flow)
+                print(f"National Water Model on {date_i}:")
+                print(nwm_flow)
+
+
+    all_gdfs = [geoglows_gdfs, usgs_gdfs, nwm_gdfs]
+
+    fatal_flow_df = pd.DataFrame(fatal_flow_list)
+    comid_df = pd.DataFrame(comid_list)
+    comid_df.to_csv("E:/LowHead_Dam_COMIDS.csv", index=False)
+    fatal_flow_df.to_csv("E:/LowHead_Dam_Streamflow.csv", index=False)
+    create_gpkg_from_lists(all_gdfs, "E:/LowHead_Dam_AllGpkgs.gpkg", sources)
 
 
 if __name__ == "__main__":
     main("E:/LowHead_Dam_Database.csv", "E:/TDX_HYDRO/streams.gpkg")
-
-
-# import geoglows
-# import numpy as np
-# import pandas as pd
-# import xarray as xr
-# from dateutil import parser     # date/time parsing from strings
-# from datetime import datetime, timedelta    # provides timedelta objects for representing time differences or durations
-#
-#
-# # format dates into 'YYYY-MM-DDThh:mm:ss' for NWM
-# def format_dates(date_list):
-#     formatted = []
-#     for date in date_list:
-#         try:
-#             dt = datetime.strptime(date.strip(), "%Y-%m-%d")
-#             formatted.append(dt.strftime("%Y-%m-%dT%H:%M:%S"))
-#         except ValueError:
-#             continue  # skip bad formats
-#     return formatted
-#
-# def get_streamflow(data_source, comid, date_range=None):
-#     """
-#         comid is either a GEOGLOWS LINKNO or National Water Model ReachID
-#
-#         date_range the [start_date, end_date] for which flow data will be retrieved.
-#             it's okay for start_date == end_date
-#         needs to be in the format "%Y-%m-%d"
-#
-#         returns average streamflow—for the entire record if no lat-long is given, else it's the average from the dates the lidar was taken
-#     """
-#     try:
-#         comid = int(comid)
-#     except ValueError:
-#         raise ValueError("comid needs to be an int")
-#
-#     start_date, end_date = None, None
-#
-#     if date_range:
-#         start_date = date_range[0]
-#         end_date = date_range[1]
-#
-#     print(start_date, end_date)
-#
-#     # this is all the data for the comid
-#     if data_source == "GEOGLOWS":
-#         # this is all the data for the comid
-#         historic_df = geoglows.data.retrospective(river_id=comid, bias_corrected=True)
-#         historic_df.index = pd.to_datetime(historic_df.index)
-#
-#         if not date_range:
-#             return np.median(historic_df[comid])
-#
-#         else:
-#             subset_df = historic_df.loc[date_range[0]:date_range[1]]
-#             return np.median(subset_df[comid])
-#
-#     elif data_source == "National Water Model":
-#         s3_path = 's3://noaa-nwm-retrospective-2-1-zarr-pds/chrtout.zarr'
-#         nwm_ds = xr.open_zarr(s3_path, consolidated=True, storage_options={"anon": True})
-#         variable_name = 'streamflow'
-#         valid_start = "1979-02-01T00:00:00" # first available data
-#
-#         if not date_range:
-#             reach_ds = nwm_ds[variable_name].sel(feature_id=comid)
-#
-#         else:
-#             if start_date == end_date:
-#                 start_date = format_dates([start_date])[0]
-#                 if start_date < valid_start:
-#                     return None
-#                 end_date = (parser.parse(start_date) + timedelta(hours=23)).isoformat()
-#
-#             else:
-#                 converted_dates = format_dates(date_range)
-#                 start_date = converted_dates[0]
-#                 end_date = converted_dates[-1]
-#
-#             reach_ds = nwm_ds[variable_name].sel(feature_id=comid).loc[dict(time=slice(start_date, end_date))]
-#
-#         df = reach_ds.to_dataframe().reset_index()
-#         df = df.set_index('time')
-#         df.index = pd.to_datetime(df.index)
-#
-#         streamflow = df['streamflow']
-#         if not streamflow.empty:
-#             return float(streamflow.mean())
-#
-#
-# # # tested with same dates, different dates, and no dates... they all work
-# # same_dates = ['2010-04-12', '2010-04-12']
-# # dif_dates = ['2010-04-12', '2010-05-12']
-# # linkno = 760645077
-# # geo = "GEOGLOWS"
-# # print(get_streamflow(geo, linkno, same_dates))
-# # print(get_streamflow(geo, linkno, dif_dates))
-# # print(get_streamflow(geo, linkno))
-# #
-# # reach_id = 368123
-# # nwm = "National Water Model"
-# # print(get_streamflow(nwm, reach_id, same_dates))
-# # print(get_streamflow(nwm, reach_id, dif_dates))
-# # print(get_streamflow(nwm, reach_id))
-
-
-
-"""
-as of now it still downloads the one in ohio wrong... 
-it does when bounding box = 0.001, but doesn't catch a different stream at that level
-"""
