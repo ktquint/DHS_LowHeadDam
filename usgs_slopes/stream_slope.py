@@ -1,4 +1,5 @@
 # i like importing based on how long they are
+import io
 import os
 import re
 import glob
@@ -7,8 +8,34 @@ import zipfile
 import requests
 import pandas as pd
 import geopandas as gpd
+from math import cos, radians
+from datetime import date
 from requests.structures import CaseInsensitiveDict
 from shapely.geometry import Point
+
+
+def make_bbox(latitude, longitude, distance_deg=0.5):
+    """
+        creates a bounding box around a point (lat, lon) ±distance_deg degrees.
+    """
+    lat_min = latitude - distance_deg
+    lat_max = latitude + distance_deg
+    lon_min = longitude - distance_deg / cos(radians(latitude))  # adjust for longitude convergence
+    lon_max = longitude + distance_deg / cos(radians(latitude))
+    return [lon_min, lat_min, lon_max, lat_max]
+
+
+def haversine(lat1, lon1, lat2, lon2):
+    """
+        computes approximate distance (km) between two points.
+    """
+    from math import radians, sin, cos, sqrt, atan2
+    R = 6371.0  # Earth radius in km
+    d_lat = radians(lat2 - lat1)
+    d_lon = radians(lon2 - lon1)
+    a = sin(d_lat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(d_lon/2)**2
+    c = 2 * atan2(sqrt(a), sqrt(1 - a))
+    return R * c
 
 
 def sanitize_filename(filename):
@@ -225,7 +252,7 @@ def extract_lat_lon_and_station_id(input_string):
     return coords[0], coords[1], str(station)
 
 
-def slope_from_lat_lon (lhd_xlsx):
+def slope_from_lat_lon(lhd_xlsx):
 
     # Read the Excel file into a DataFrame
     lhd_df = pd.read_excel(lhd_xlsx)
@@ -237,6 +264,91 @@ def slope_from_lat_lon (lhd_xlsx):
     lhd_df_slopes = merge_tables(lhd_df_gdbs)
     lhd_df_slopes.to_excel(lhd_xlsx, index=False)
     # Display the selected columns: print(selected_columns)
+
+# def load_usgs(station_id):
+#     # create bounding box coordinates
+#     bbox = make_bbox(latitude, longitude, 0.1)
+#
+#     # Request sites with siteType=ST (surface water sites) that have instantaneous data
+#     bbox_url = (f"https://waterservices.usgs.gov/nwis/site/?format=rdb"
+#                 f"&bBox={bbox[0]:.7f},{bbox[1]:.7f},{bbox[2]:.7f},{bbox[3]:.7f}"
+#                 f"&siteType=ST")
+#
+#     response = requests.get(bbox_url)
+#     data = response.text
+#
+#     # Read tab-separated data, skipping header comments
+#     response_df = pd.read_csv(io.StringIO(data), sep="\t", comment="#", skip_blank_lines=True)
+#     response_df['dec_lat_va'] = pd.to_numeric(response_df['dec_lat_va'], errors='coerce')
+#     response_df['dec_long_va'] = pd.to_numeric(response_df['dec_long_va'], errors='coerce')
+#     response_df = response_df.dropna(subset=['dec_lat_va', 'dec_long_va'])
+#
+#     # Filter for likely stream gages and calculate distance
+#     stream_df = response_df[response_df['site_no'].astype(str).str.len() <= 10].copy()
+#
+#     stream_df['distance_km'] = stream_df.apply(
+#         lambda row: haversine(latitude, longitude, row['dec_lat_va'], row['dec_long_va']),
+#         axis=1)
+#     print(f'This is for LHD No. {self.id}')
+#     print("stream_df: ")
+#     print(stream_df[['site_no', 'station_nm', 'distance_km']].sort_values(by='distance_km'))
+#
+#     # Prioritize sites with "river" in the name, with a fallback
+#     river_df = stream_df[stream_df['station_nm'].str.contains(r'river| R ', case=False, na=False)]
+#
+#     if river_df.empty:
+#         nearest_site = stream_df.loc[stream_df['distance_km'].idxmin()]
+#     else:
+#         nearest_site = river_df.loc[river_df['distance_km'].idxmin()]
+#
+#     print("nearest_site: ")
+#     print(nearest_site)
+#     self.name = nearest_site['station_nm']
+#     self.site_no = nearest_site['site_no']
+#
+#     if self.geometry:
+#         # Store the lat/lon for the site
+#         self.usgs_lat = nearest_site['dec_lat_va']
+#         self.usgs_lon = nearest_site['dec_long_va']
+#
+#         # Create a GeoDataFrame for the single point location of the USGS site
+#         self.usgs_geom = gpd.GeoDataFrame(
+#             [{'site_no': self.site_no, 'station_nm': self.name}],
+#             geometry=[Point(self.usgs_lon, self.usgs_lat)],
+#             crs="EPSG:4326"
+#         )
+#
+#     if self.streamflow:
+#         start_date = '1850-01-01'
+#         end_date = date.today().isoformat()
+#
+#         # Fetch daily values for discharge (00060)
+#         url = (
+#             f"https://waterservices.usgs.gov/nwis/dv/?sites={self.site_no}"
+#             f"&parameterCd=00060&startDT={start_date}&endDT={end_date}&format=json"
+#         )
+#         response = requests.get(url)
+#         data = response.json()
+#
+#         # Check for empty time series response
+#         if not data['value']['timeSeries']:
+#             print(f"No USGS streamflow data found for site {self.site_no}.")
+#             return
+#
+#         try:
+#             df = pd.json_normalize(data['value']['timeSeries'][0]['values'][0]['value'])
+#             df = df.rename(columns={'dateTime': 'time', 'value': 'flow_cfs'})
+#             df['flow_cfs'] = pd.to_numeric(df['flow_cfs'], errors='coerce')
+#
+#             # remove any negative numbers
+#             df = df[df['flow_cfs'] >= 0]
+#
+#             self.usgs_flow = df['flow_cfs'] / 35.315
+#             self.usgs_time = pd.to_datetime(df['time'])
+#         except (KeyError, IndexError):
+#             print(f"Could not parse streamflow JSON for site {self.site_no}.")
+
+
 
 ''' def slope_lat_long (streamdata.xlsx)
         read excel to df
@@ -250,23 +362,18 @@ def slope_from_lat_lon (lhd_xlsx):
 """
 Old Test Case:
 """
-'''gage_info = str(input("Enter gage info: "))
+# gage_info = str(input("Enter gage info: "))
+#
+# latitude, longitude, station_id = extract_lat_lon_and_station_id(gage_info)
+# output_folder = './' + station_id
+#
+# print(f'Station ID: {station_id}')
+# print(f'Latitude: {latitude}')
+# print(f'Longitude: {longitude}')
+#
+# stream_slope = slope_from_lat_lon(lhd_database_xlsx)
+# print(f'The stream slope at USGS Station {station_id} is {stream_slope}')
 
-latitude, longitude, station_id = extract_lat_lon_and_station_id(gage_info)
-output_folder = './' + station_id
 
-print(f'Station ID: {station_id}')
-print(f'Latitude: {latitude}')
-print(f'Longitude: {longitude}')
 
-stream_slope = slope_from_lat_lon(lhd_database_xlsx)
-print(f'The stream slope at USGS Station {station_id} is {stream_slope}')'''
 
-''''###
-Test Case
-###'''
-# lhd_csv = "C:/Users/pgordi/Downloads/LHD stream-slope test cases/LHD database test case 2.1 - duplicate downloads.csv"
-# lhd_df = pd.read_csv(lhd_csv)
-# output_folder = "C:/Users/pgordi/Downloads/LHD downloads"
-# search_and_download_gdb(lhd_df, output_folder)
-# lhd_df.to_csv("C:/Users/pgordi/Downloads/LHD stream-slope test cases/LHD database test case 2.1 - duplicate downloads.csv", index=False)
