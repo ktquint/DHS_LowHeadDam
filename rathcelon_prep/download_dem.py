@@ -7,15 +7,17 @@ import pandas as pd
 from datetime import datetime
 from rasterio.merge import merge
 from rasterio.io import MemoryFile
-from rasterio.warp import calculate_default_transform, reproject, Resampling
+from rasterio.warp import calculate_default_transform, reproject, Resampling, transform_bounds
 
 
 def extract_date(item):
     return item.get("dateCreated") or item.get("publishedDate") or ""
 
+
 def extract_tile_id(title):
     match = re.search(r'x\d+y\d+', title)
     return match.group(0) if match else None
+
 
 def sanitize_filename(filename):
     """
@@ -114,6 +116,62 @@ def merge_dems(dem_files, output_filename):
         print("Merged DEM not found. Original files not deleted.")
 
 
+def check_bbox_coverage(dem_path, bbox):
+    """
+    Check if all four corners of the bounding box are contained within the DEM
+    and have valid elevation values (not NaN or nodata).
+
+    Args:
+        dem_path: Path to the merged DEM file
+        bbox: Tuple of (min_lon, min_lat, max_lon, max_lat)
+
+    Returns:
+        bool: True if all corners are covered and have valid data, False otherwise
+    """
+    try:
+        with rasterio.open(dem_path) as dem:
+            dem_bounds = dem.bounds
+            nodata = dem.nodata
+            crs_needs_transform = dem.crs.to_string() != 'EPSG:4326'
+
+            # Define the four corners (in EPSG:4326)
+            corners = [
+                (bbox[0], bbox[1]),  # bottom-left
+                (bbox[2], bbox[1]),  # bottom-right
+                (bbox[2], bbox[3]),  # top-right
+                (bbox[0], bbox[3])  # top-left
+            ]
+
+            # Transform corners to raster CRS if needed
+            if crs_needs_transform:
+                xs, ys = zip(*corners)
+                xs, ys = rasterio.warp.transform('EPSG:4326', dem.crs, xs, ys)
+                corners = list(zip(xs, ys))
+
+            # Check each corner
+            for x, y in corners:
+                # Bounds check
+                if not (dem_bounds.left <= x <= dem_bounds.right and
+                        dem_bounds.bottom <= y <= dem_bounds.top):
+                    return False
+
+                # Convert to pixel indices
+                row, col = dem.index(x, y)
+                if not (0 <= row < dem.height and 0 <= col < dem.width):
+                    return False
+
+                # Read elevation value
+                value = dem.read(1)[row, col]
+                if value == nodata or (isinstance(value, float) and math.isnan(value)):
+                    return False
+
+            return True
+
+    except Exception as e:
+        print(f"Error checking bbox coverage: {e}")
+        return False
+
+
 def download_dems(lhd_df, dem_dir, resolution):
     """
         this bad boy takes a DataFrame, finds the DEM associated with the lat/lon, records the DEM name in the DataFrame,
@@ -123,12 +181,12 @@ def download_dems(lhd_df, dem_dir, resolution):
         dem_dir: directory where DEM subdirectories will be located
         resolution: preferred resolution of the DEM
     """
-    base_url = "https://tnmaccess.nationalmap.gov/api/v1/products" # all products are found here
+    base_url = "https://tnmaccess.nationalmap.gov/api/v1/products"  # all products are found here
 
     print("Starting DEM Download Process...")
     all_datasets = ["Digital Elevation Model (DEM) 1 meter",
-        "National Elevation Dataset (NED) 1/9 arc-second",
-        "National Elevation Dataset (NED) 1/3 arc-second Current"]
+                    "National Elevation Dataset (NED) 1/9 arc-second",
+                    "National Elevation Dataset (NED) 1/3 arc-second Current"]
     if resolution == "1 m":
         datasets = all_datasets
     elif resolution == "1/9 arc-second (~3 m)":
@@ -143,6 +201,9 @@ def download_dems(lhd_df, dem_dir, resolution):
     if "dem_sanitized_names" not in lhd_df.columns:
         lhd_df["dem_sanitized_names"] = ""
     lhd_df["dem_sanitized_names"] = lhd_df["dem_sanitized_names"].astype("object")
+
+    # List to store bbox coverage results
+    bbox_coverage_results = []
 
     for index, row in lhd_df.iterrows():
         # let's check to see if this dam already has a DEM...
@@ -184,7 +245,7 @@ def download_dems(lhd_df, dem_dir, resolution):
             # define the API parameters
             params = {"bbox": f"{bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]}",
                       "datasets": dataset,
-                        # "max": 10,
+                      # "max": 10,
                       "prodFormats": ["GeoTIFF"],
                       "outputFormat": "JSON"}
             try:
@@ -276,13 +337,40 @@ def download_dems(lhd_df, dem_dir, resolution):
         elif final_results:
             print(f"DEM file already exists for {lhd_id}, skipping download")
 
+        # Check if we found any results first
         if not final_results:  # if there's no results for any dataset
             print(f"No DEM data found for {lhd_id}")
             continue
+        # If we have results, check if DEM already exists
+        elif os.path.isfile(dem_path):
+            print(f"DEM file already exists for {lhd_id}, skipping download")
 
+        # Check bounding box coverage (silently collect results)
+        if os.path.isfile(dem_path):
+            bbox_covered = check_bbox_coverage(dem_path, bbox)
+            bbox_coverage_results.append({
+                'lhd_id': lhd_id,
+                'covered': bbox_covered,
+                'dem_path': dem_path
+            })
 
         lhd_df.at[index, "dem_dir"] = dem_subdir
 
+    # Generate bbox coverage report at the end
+    failed_coverage = [result for result in bbox_coverage_results if not result['covered']]
+
+    if not failed_coverage:
+        print("\nBBox coverage check complete, no issues found")
+    else:
+        print(f"\nBBox Coverage Report - {len(failed_coverage)} DEM(s) failed coverage check:")
+        print("-" * 60)
+        for failure in failed_coverage:
+            print(f"Dam ID: {failure['lhd_id']} - INCOMPLETE coverage")
+            print(f"  DEM Path: {failure['dem_path']}")
+        print("-" * 60)
+
     # lhd_df now has a column with the location of the dem associated with each dam
     return lhd_df
+
+
 
