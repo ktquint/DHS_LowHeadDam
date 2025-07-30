@@ -132,7 +132,7 @@ def find_water_gpstime(lat, lon):
 
 def est_dem_baseflow(stream_reach, source):
     """
-        finds baseflow for a dem given latitude and longitude
+        finds baseflow for a dem along a stream reach
     """
     # extract the lat and lon
     lat = stream_reach.latitude
@@ -141,7 +141,6 @@ def est_dem_baseflow(stream_reach, source):
     # get the date range of the lidar data
     # dem_dates = get_dem_dates(lat, lon)
     lidar_gpstime = find_water_gpstime(lat, lon)
-    print(lidar_gpstime)
 
     gpstime_date = None
     if lidar_gpstime:

@@ -101,6 +101,3 @@ class Dam:
 
     def __repr__(self):
         return "Hi, I'm a Dam"
-
-
-
