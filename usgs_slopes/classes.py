@@ -131,7 +131,7 @@ class StreamGage:
         bbox_geom = box(*bbox)
 
         all_flowlines = gpd.read_file(filename=self.gpkg_loc, layer='NHDFlowline', bbox=bbox_geom,
-                                      engine='fiona')
+                                      engine='pyogrio')
         all_flowlines.columns = all_flowlines.columns.str.lower()  # normalize column names to lowercase
         all_flowlines = all_flowlines.to_crs(epsg=4326)
 
@@ -151,7 +151,7 @@ class StreamGage:
         self.nhdplusid = int(nearest_flowline['nhdplusid'].values[0])
 
         # Read metadata layer and normalize column names
-        metadata = gpd.read_file(filename=self.gpkg_loc, layer='NHDPlusFlowlineVAA', engine='fiona')
+        metadata = gpd.read_file(filename=self.gpkg_loc, layer='NHDPlusFlowlineVAA', engine='pyogrio')
         metadata.columns = metadata.columns.str.lower()
 
         # Only keep relevant columns (if present)
@@ -175,9 +175,9 @@ class StreamGage:
 
 
 
-james = StreamGage(station_id="10163000")
-
-james.download_nhd("C:/Users/ki87ujmn/Downloads")
-james.merge_metadata()
-
-print(james)
+# james = StreamGage(station_id="10163000")
+#
+# james.download_nhd("C:/Users/ki87ujmn/Downloads")
+# james.merge_metadata()
+#
+# print(james)

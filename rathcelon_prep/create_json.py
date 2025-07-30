@@ -1,39 +1,51 @@
 import json
 import pandas as pd
-from typing import Any, TextIO
 
 
-def rathcelon_input (lhd_csv, output_loc):
+def rathcelon_input(lhd_csv, output_loc, hydrography, hydrology):
     lhd_df = pd.read_csv(lhd_csv)
-    dams: list[dict[str | Any, str | bool | Any]] = []
+    dams = []
     for index, row in lhd_df.iterrows():
         name = str(row["ID"])
         dam_csv = lhd_csv
         dam_id_field = "ID"
         dam_id = row["ID"]
-        flowline = row["flowline"]
-        dem_dir = row["dem_dir"]
+
+        if hydrography == "GEOGLOWS":
+            flowline = row["flowline_TDX"]
+        else:
+            flowline = row["flowline_NHD"]
+
+        res_order = ['dem_1m', 'dem_3m', 'dem_10m']
+        dem_dir = None
+        for res in res_order:
+            val = row[res]
+            if pd.notna(val):
+                dem_dir = val
+                break
+
         output_dir = row["output_dir"]
-        if row["known_baseflow"] is not None:
-            known_baseflow = row["known_baseflow"]
-        dam_dict = {
-            "name" : name,
-            "dam_csv" : dam_csv,
-            "dam_id_field" : dam_id_field,
-            "dam_id" : dam_id,
-            "flowline" : flowline,
-            "dem_dir" : dem_dir,
-            "bathy_use_banks": False,
-            "output_dir" : output_dir,
-            "process_stream_network" : True,
-            "find_banks_based_on_landcover" : False,
-            "create_reach_average_curve_file" : False,
-            "known_baseflow": known_baseflow
-            }
+
+        if hydrology == "GEOGLOWS":
+            known_baseflow = row['dem_baseflow_GEOGLOWS']
+        else:
+            known_baseflow = row['dem_baseflow_NWM']
+
+
+        dam_dict = {"name" : name,
+                    "dam_csv" : dam_csv,
+                    "dam_id_field" : dam_id_field,
+                    "dam_id" : dam_id,
+                    "flowline" : flowline,
+                    "dem_dir" : dem_dir,
+                    "bathy_use_banks": False,
+                    "output_dir" : output_dir,
+                    "process_stream_network" : True,
+                    "find_banks_based_on_landcover" : False,
+                    "create_reach_average_curve_file" : False,
+                    "known_baseflow": known_baseflow}
         dams.append(dam_dict)
-    input_data = {
-        "dams" : dams
-    }
+    input_data = {"dams" : dams}
     with open(output_loc, 'w') as json_file:
         # noinspection PyTypeChecker
         json.dump(input_data, json_file, indent=4)

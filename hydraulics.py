@@ -1,8 +1,9 @@
 """
-this file contains all the equations I'll use
-to calculate the hydraulic characteristics at
-the cross-sections of the low-head dams.
+    this file contains all the equations I'll use
+    to calculate the hydraulic characteristics at
+    the cross-sections of the low-head dams.
 """
+
 import numpy as np
 from scipy.optimize import fsolve
 

@@ -1,11 +1,12 @@
 import os
+from dam import Dam
 import pandas as pd
-import xarray as xr
+# import xarray as xr
 import tkinter as tk
 from tkinter import ttk
 from tkinter import filedialog
-from hydroinformatics import StreamReach
-import create_json as cj, download_dem as dd, download_stream as ds, dem_baseflow as db
+# from hydroinformatics import StreamReach
+import create_json as cj# , download_dem as dem, download_flowline as ds, dem_baseflow as db
 
 
 def select_project_dir():
@@ -90,7 +91,7 @@ def create_input_file():
     """
 
     # this is the database I'm working with:
-    lhd_database = database_entry.get()
+    lhd_xlsx = database_entry.get()
     hydrography = hydro_var.get()
     dem_resolution = dd_var.get()
     hydrology = logy_var.get()
@@ -106,53 +107,29 @@ def create_input_file():
     # we'll turn the finished data_frame into a csv with the name:
     lhd_csv = csv_entry.get()
 
+
     # convert your database to a data_frame
-    lhd_df = pd.read_excel(lhd_database)
-    lhd_dem = dd.download_dems(lhd_df,
-                               dem_folder, dem_resolution)  # this function should take a dataframe, output folder (where the DEMs are downloaded) and return a dataframe
-    lhd_dem.to_csv(lhd_csv, index=False)
-    # now that we have DEMs, let's get the streamlines
-    lhd_strm = ds.assign_flowlines(lhd_dem,
-                                   strm_folder,
-                                   hydrography)  # this should take a dataframe, output folder (where the geopackages are downloaded) and return a dataframe
-    # add a column with the location of the results folder
-    lhd_strm['output_dir'] = results_folder
-    lhd_strm.to_csv(lhd_csv, index=False)
+    lhd_df = pd.read_excel(lhd_xlsx)
 
-    # add a columns with baseflow and fatality flows....
-    s3_path = 's3://noaa-nwm-retrospective-2-1-zarr-pds/chrtout.zarr'
-    ds_nwm = xr.open_zarr(s3_path, consolidated=True, storage_options={"anon": True})
+    all_dams = []
 
-    if hydrology == "GEOGLOWS":
-        if 'geoglows_baseflow' not in lhd_strm.columns:
-            lhd_strm['geoglows_baseflow'] = None
-    elif hydrology == "National Water Model":
-        if 'nwm_baseflow' not in lhd_strm.columns:
-            lhd_strm['nwm_baseflow'] = None
-    else:
-        lhd_strm['usgs_baseflow'] = None
-
-    for index, row in lhd_dem.iterrows():
-        lat = row['latitude']
-        lon = row['longitude']
-
-        stream_reach = StreamReach(lat, lon, hydrology, geoglows_streams="E:/TDX_HYDRO/streams.gpkg",
-                                   nwm_ds=ds_nwm)
-        baseflow = db.estimate_dem_baseflow(stream_reach)
-
-        if hydrology == "GEOGLOWS":
-            lhd_strm.at[index, 'geoglows_baseflow'] = baseflow
-        elif hydrology == "National Water Model":
-            lhd_strm.at[index, 'nwm_baseflow'] = baseflow
+    for _, row in lhd_df.iterrows():
+        dam = Dam(**row.to_dict())
+        if hydrography == "GEOGLOWS":
+            dam.assign_flowlines(strm_folder, hydrography, "E:/TDX_HYDRO/streams.gpkg")
         else:
-            lhd_strm.at[index, 'usgs_baseflow'] = baseflow
+            dam.assign_flowlines(strm_folder, hydrography)
+        dam.assign_dem(dem_folder, dem_resolution)
+        dam.assign_output(results_folder)
+        dam.est_dem_baseflow(hydrology)
+        all_dams.append(dam)
 
-
-    # a little convoluted, but we need a .csv for rathcelon to read
-    lhd_strm.to_csv(lhd_csv, index=False)
+    dam_df = pd.DataFrame([dam.__dict__ for dam in all_dams])
+    dam_df.to_csv(lhd_csv, index=False) # save .csv copy for rathcelon
+    dam_df.to_excel(lhd_xlsx, index=False) # update .xlsx
 
     json_loc = json_entry.get()
-    cj.rathcelon_input(lhd_csv, json_loc)
+    cj.rathcelon_input(lhd_csv, json_loc, hydrography, hydrology)
     # now type open the terminal in the rathcelon repository and type `rathcelon json ` + the input_loc path
 
 
@@ -238,7 +215,7 @@ hydro_label.pack(side=tk.LEFT, padx=(0, 10))
 
 hydro_var = tk.StringVar()
 hydro_dropdown = ttk.Combobox(hydro_frame, textvariable=hydro_var, state="readonly")
-hydro_dropdown['values'] = ("NDHPlus", "GEOGLOWS")
+hydro_dropdown['values'] = ("NHDPlus", "GEOGLOWS")
 hydro_dropdown.current(0)
 hydro_dropdown.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
@@ -264,7 +241,7 @@ logy_label.pack(side=tk.LEFT, padx=(0, 10))
 
 logy_var = tk.StringVar()
 logy_dropdown = ttk.Combobox(logy_frame, textvariable=logy_var, state="readonly")
-logy_dropdown['values'] = ("NWM", "GEOGLOWS")
+logy_dropdown['values'] = ("National Water Model", "GEOGLOWS")
 logy_dropdown.current(0)
 logy_dropdown.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
