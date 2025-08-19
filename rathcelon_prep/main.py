@@ -1,12 +1,11 @@
 import os
 from dam import Dam
 import pandas as pd
-# import xarray as xr
+import xarray as xr
 import tkinter as tk
 from tkinter import ttk
 from tkinter import filedialog
-# from hydroinformatics import StreamReach
-import create_json as cj# , download_dem as dem, download_flowline as ds, dem_baseflow as db
+import create_json as cj
 
 
 def select_project_dir():
@@ -113,20 +112,37 @@ def create_input_file():
 
     all_dams = []
 
+    # if we're estimating the streamflows using the NWM, let's just download the data once...
+    nwm_ds = None
+    if hydrology == 'National Water Model':
+        s3_path = 's3://noaa-nwm-retrospective-2-1-zarr-pds/chrtout.zarr'
+        nwm_ds = xr.open_zarr(s3_path, consolidated=True, storage_options={"anon": True})
+
+    # make all the stream reaches
+
     for _, row in lhd_df.iterrows():
         dam = Dam(**row.to_dict())
-        if hydrography == "GEOGLOWS":
-            dam.assign_flowlines(strm_folder, hydrography, "E:/TDX_HYDRO/streams.gpkg")
-        else:
-            dam.assign_flowlines(strm_folder, hydrography)
+        # save the hydrology and hydrography info to the dam, so we don't have to pass them as fields later
+        dam.assign_hydrology(hydrology)
+        dam.assign_hydrography(hydrography)
+        # find the right flowlines and save them to the strm folder
+        dam.assign_flowlines(strm_folder)
+        # find the DEM's around the dam, download them, and save their loc.
         dam.assign_dem(dem_folder, dem_resolution)
+        # save the results folder loc.
         dam.assign_output(results_folder)
-        dam.est_dem_baseflow(hydrology)
+        # create a stream reach obj. we'll use to download fatal flows and DEM baseflow
+        dam.create_reach(nwm_ds)
+        # estimate the baseflow based on the hydrology option selected
+        dam.est_dem_baseflow()
+        dam.est_fatal_flows()
         all_dams.append(dam)
+        print(f'Finished Dam No. {row["ID"]}')
 
     dam_df = pd.DataFrame([dam.__dict__ for dam in all_dams])
     dam_df.to_csv(lhd_csv, index=False) # save .csv copy for rathcelon
     dam_df.to_excel(lhd_xlsx, index=False) # update .xlsx
+    print('Finished Downloading Data for All Requested Dams...')
 
     json_loc = json_entry.get()
     cj.rathcelon_input(lhd_csv, json_loc, hydrography, hydrology)

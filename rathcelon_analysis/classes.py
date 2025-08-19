@@ -14,7 +14,6 @@ import pyproj           # handles CRS conversions
 import rasterio         # reads, writes, and processes raster datasets
 import numpy as np      # numerical computing with support for arrays, matrices, and math functions
 import pandas as pd     # data analysis and manipulation tool; reads in CSV, TXT, XLSX files
-import dbfread as dbf   # reads DBF (dBase) files (the rathcelon output)
 import geopandas as gpd # extends pandas for working with geospatial vector data (points, lines, polygons)
 import contextily as ctx    # adds basemaps (e.g., OpenStreetMap) to geospatial plots, often used with geopandas
 import hydraulics as hyd    # hydraulic calculations and functions (my own code)
@@ -74,7 +73,7 @@ class CrossSection:
         # cross-section plot info
         self.wse = xs_row['Elev']
         # i'll make two lists that i'll populate with just the wse values... you'll see why in a minute
-        INVALID_THRESHOLD = -1e5
+        INVALID_THRESHOLD = 0
         y_1 = xs_row['XS1_Profile'][::-1] # since these go from the center out, i'll flip them around
         y_2 = xs_row['XS2_Profile']
         x_1 = [0 + j * xs_row['Ordinate_Dist'] for j in range(len(y_1))]
@@ -93,6 +92,7 @@ class CrossSection:
                 y_clean.append(yi)
 
         self.elevation = y_clean
+        self.bed_elevation = min(y_clean)
         self.lateral = x_clean
         # let's start with the left side
         wse_left = []
@@ -283,88 +283,119 @@ class Dam:
         print(self.fatality_dates) # dates should be in the form "YYYY-mm-dd"
 
         # ----------------------------------------- HYDROLOGIC INFORMATION ------------------------------------------- #
+        """
+            to make it easier on me i'll just download the fatal_flows when I get the DEM baseflow...
+        """
 
-        self.fatal_flows = []
-
-        ## Establish the COMID ##
         if hydrology == "GEOGLOWS":
-            # establish which values to use as the comid
-            self.comid = id_row['LINKNO'].values[0]
+            self.fatal_flows = ast.literal_eval(id_row.at[0, 'fatality_flows_GEOGLOWS'])
+            self.known_baseflow = id_row['dem_baseflow_GEOGLOWS'].values[0]
+            # # establish which values to use as the comid
+            # self.comid = id_row['LINKNO'].values[0]
 
         elif hydrology == "USGS":
-            flow_cfs = id_row['USGS_fatal_flows'].apply(ast.literal_eval).values[0]
-            self.fatal_flows = [Q / 35.315 for Q in flow_cfs]
+            self.fatal_flows = ast.literal_eval(id_row.at[0, 'fatality_flows_USGS'])
+            self.known_baseflow = id_row['dem_baseflow_USGS'].values[0]
+            # flow_cfs = id_row['USGS_fatal_flows'].apply(ast.literal_eval).values[0]
+            # self.fatal_flows = [Q / 35.315 for Q in flow_cfs]
 
         else:   # NWM
-            self.comid = id_row['reach_id'].values[0]
-
-
-        ### Fill out the fatal_flows attr. ###
-        if 'fatal_flows' not in lhd_df.columns:
-            lhd_df['fatal_flows'] = None
-
-        # if the fatal_flows column is empty in the row we'll populate it
-        elif pd.isna(id_row['fatal_flows'].values[0]):
-            for date in self.fatality_dates:
-                flow_value = hi.get_streamflow(hydrology, self.comid, [date, date])
-
-                try:
-                    # convert the np.float to a float
-                    flow_float = float(flow_value)
-                    self.fatal_flows.append(flow_float)
-
-                except (ValueError, TypeError):
-                    continue
-
-            # if we're getting them for the first time we'll save them to the csv
-            lhd_df.loc[lhd_df['ID'] == self.id, 'fatal_flows'] = str(self.fatal_flows)
-
-        # if there are already values we'll add them to our local variable
-        else:
-            self.fatal_flows = ast.literal_eval(id_row.at[0, 'fatal_flows'])
+            self.fatal_flows = ast.literal_eval(id_row.at[0, 'fatality_flows_NWM'])
+            self.known_baseflow = id_row['dem_baseflow_NWM'].values[0]
+            # self.comid = id_row['reach_id'].values[0]
 
 
         # ---------------------------------- READ IN VDT + CROSS-SECTION INFO ---------------------------------------- #
 
         # find attributes based on the vdt and xs files
-        local_loc = os.path.join(results_dir, "VDT", f"{str(self.id)}_Local_CurveFile.dbf")
-        database_loc = os.path.join(results_dir, "VDT", f"{str(self.id)}_Local_VDT_Database.dbf")
-        xs_loc = os.path.join(results_dir, "XS", f"{str(self.id)}_XS_Out.txt" )
+        vdt_gpkg = os.path.join(results_dir, "VDT", f"{self.id}_Local_VDT_Database.gpkg")
+        rc_gpkg = os.path.join(results_dir, "VDT", f"{self.id}_Local_CurveFile.gpkg")
+        xs_gpkg = os.path.join(results_dir, "XS", f"{self.id}_Local_XS_Lines.gpkg")
 
-        # save tif and shp files for later...
-        self.shp_loc = os.path.join(results_dir, "VDT", f"{str(self.id)}_Local_CurveFile.shp")
-        self.tif_loc = os.path.join(results_dir, "Bathymetry", f"{str(self.id)}_ARC_Bathy.tif")
+        vdt_gdf = gpd.read_file(vdt_gpkg)
+        rc_gdf = gpd.read_file(rc_gpkg)
+        xs_gdf = gpd.read_file(xs_gpkg)
 
-        # read in dbf then translate it to data.frame
-        local_dbf = dbf.DBF(local_loc)
-        local_df = pd.DataFrame(iter(local_dbf))
-        database_dbf = dbf.DBF(database_loc)
-        database_df = pd.DataFrame(iter(database_dbf))
-
-        # read in txt as data.frame
-        xs_df = pd.read_csv(xs_loc, sep='\t')
-
-        # evaluate the strings as literals (lists)
+        # convert str columns to lists
         list_columns = ['XS1_Profile', 'Manning_N_Raster1', 'XS2_Profile', 'Manning_N_Raster2']
+
         for col in list_columns:
-            xs_df[col] = xs_df[col].apply(ast.literal_eval)
-        # check if the two 'Ordinate_Dist' columns are equal row-by-row
-        if xs_df['Ordinate_Dist'].equals(xs_df['Ordinate_Dist.1']):
-            xs_df = xs_df.drop(columns=['Ordinate_Dist.1'])  # drop the duplicate
+            xs_gdf[col] = xs_gdf[col].apply(ast.literal_eval)
 
-        # let's merge the tables (how='left' because vdt only contains the xs we want and xs has all of them)
-        merged_df = pd.merge(local_df, xs_df, on=['COMID', 'Row', 'Col'], how='left')
+        # remove duplicated ordinate_dist col
+        if xs_gdf['Ordinate_Dist'].equals(xs_gdf['Ordinate_Dist.1']):
+            xs_gdf = xs_gdf.drop(columns=['Ordinate_Dist.1'])
 
-        database_df.drop(['COMID', 'Row', 'Col', 'Lat', 'Lon'], axis=1, inplace=True)
+        def fuzzy_merge(left, right, tol=2):
+            """
+            Perform fuzzy merge based on Row and Col coordinates within tolerance
+            """
+            result_rows = []
 
-        complete_df = pd.concat([merged_df, database_df], axis=1)
+            # Get column names to avoid conflicts
+            right_cols_to_add = [col for col in right.columns if col not in ['COMID', 'Row', 'Col']]
+
+            for comid, group_left in left.groupby('COMID'):
+                group_right = right[right['COMID'] == comid].copy()
+
+                if group_right.empty:
+                    # No matches for this COMID, add left rows with NaN for right columns
+                    for col in right_cols_to_add:
+                        group_left = group_left.copy()
+                        group_left[col] = np.nan
+                    result_rows.append(group_left)
+                    continue
+
+                for idx, row_left in group_left.iterrows():
+                    # Find matches within tolerance
+                    row_diff = abs(group_right['Row'] - row_left['Row'])
+                    col_diff = abs(group_right['Col'] - row_left['Col'])
+                    matches = group_right[(row_diff <= tol) & (col_diff <= tol)]
+
+                    if not matches.empty:
+                        # If multiple matches, take the closest one
+                        if len(matches) > 1:
+                            distances = row_diff + col_diff
+                            closest_idx = distances.idxmin()
+                            match = matches.loc[closest_idx]
+                        else:
+                            match = matches.iloc[0]
+
+                        # Create combined row
+                        combined_row = row_left.copy()
+                        for col in right_cols_to_add:
+                            combined_row[col] = match[col]
+                        result_rows.append(combined_row.to_frame().T)
+                    else:
+                        # No match found, add NaN values for right columns
+                        row_with_nans = row_left.copy()
+                        for col in right_cols_to_add:
+                            row_with_nans[col] = np.nan
+                        result_rows.append(row_with_nans.to_frame().T)
+
+            # Concatenate all results
+            if result_rows:
+                result_df = pd.concat(result_rows, ignore_index=True)
+                return result_df
+            else:
+                return gpd.GeoDataFrame()
+
+        # the rc and vdt gpkgs have the same geometry, so let's merge everything we can
+        vdt_rc_gdf = fuzzy_merge(vdt_gdf, rc_gdf, tol=3)
+        dam_gdf = fuzzy_merge(vdt_rc_gdf, xs_gdf, tol=3)
+
+        for index, row in dam_gdf.iterrows():
+            print(row[['depth_a', 'depth_b']])
+
+        # save tif and xs files for later...
+        self.xs_gpkg = xs_gpkg
+        self.bathy_tif = os.path.join(results_dir, "Bathymetry", f"{str(self.id)}_ARC_Bathy.tif")
+
 
         # let's go through each row of the df and create cross-sections objects
-        for index, row in complete_df.iterrows():
+        for index, row in dam_gdf.iterrows():
             self.cross_sections.append(CrossSection(index, row, self.id, self.weir_length, self.fig_dir))
 
-        # hydrologic information
-        self.known_baseflow = id_row['known_baseflow'].values[0]
 
         # let's add the dam height and slope to the csv
         for i in range(len(self.cross_sections)-1):
@@ -378,27 +409,22 @@ class Dam:
             y_2s = []
 
             if est_dam:
-                delta_wse_i = complete_df.iloc[-1]['Elev'] - complete_df.at[i, 'Elev']
-                # delta_wse_i = self.cross_sections[-1].wse - self.cross_sections[i].wse
+                delta_wse_i = self.cross_sections[i].wse - self.cross_sections[-1].wse # wse_ds - wse_us
 
-                # tailwater using the power function
-                # y_i = self.cross_sections[i].a * Q_i**self.cross_sections[i].b
-                # tailwater using the wse and depth
-                y_i = complete_df.at[i, 'Elev'] - min(self.cross_sections[i].elevation)
-                # y_i = self.cross_sections[i].wse - min(self.cross_sections[i].elevation)
+                # tailwater using the wse and bed_elevation
+                y_i = self.cross_sections[i].wse - self.cross_sections[i].bed_elevation
 
                 # estimate dam height, add to cross-section and csv file
-                z_i = -1 * self.cross_sections[i].slope * self.cross_sections[i].distance
-                # P_i = dam_height(Q_i, L_i, delta_wse_i, y_i, z_i)
+                # z_i = -1 * self.cross_sections[i].slope * self.cross_sections[i].distance
                 # ths one has delta z = 0
-                P_i = hyd.dam_height(self.known_baseflow, self.weir_length, delta_wse_i, y_i, z_i)
+
+                P_i = hyd.dam_height(self.known_baseflow, self.weir_length, delta_wse_i, y_i) # , z_i)
                 if P_i < 1 or P_i > 100:
-                    P_i = 1 # 3.05 # according to the literature, this is one of the most common dam heights
+                    P_i = 3.05 # according to the literature, this is one of the most common dam heights
                 self.cross_sections[i].set_dam_height(P_i)
                 lhd_df.loc[lhd_df['ID'] == self.id, f'P_{i + 1}'] = P_i * 3.281 # convert to ft
 
                 # now let's add the tailwater, flip, and conjugate depths for each flow/cross-section combo
-
                 for flow in self.fatal_flows:
                     # calc. tailwater from power function
                     y_t = self.cross_sections[i].a * flow**self.cross_sections[i].b
@@ -456,7 +482,7 @@ class Dam:
     # noinspection PyTypeChecker
     def plot_map(self):
         # Step 1: Open raster and reproject to EPSG:3857
-        with rasterio.open(self.tif_loc) as src:
+        with rasterio.open(self.bathy_tif) as src:
             dst_crs = 'EPSG:3857'
             transform, width, height = calculate_default_transform(
                 src.crs, dst_crs, src.width, src.height, *src.bounds)
@@ -485,7 +511,7 @@ class Dam:
             transform = reprojected.transform
 
         # Step 2: Load and reproject shapefile
-        gdf = gpd.read_file(self.shp_loc)
+        gdf = gpd.read_file(self.xs_gpkg)
         gdf = gdf.to_crs('EPSG:3857')
 
         # Step 3: Set zoom bounds

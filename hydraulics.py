@@ -82,7 +82,7 @@ def dam_height(Q, b, delta_wse, y_t, delta_z=0, g=9.81):
     q = Q/b  # discharge (m^2/s)
     ## derived constants
     A = (2 / 3) * np.sqrt(2 * g)
-    D = delta_wse + y_t + delta_z  # total pressure head + elevation
+    D = -delta_wse + y_t + delta_z  # total pressure head + elevation
 
     # solve for q in terms of H
     def func(H):

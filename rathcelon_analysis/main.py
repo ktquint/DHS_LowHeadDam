@@ -1,10 +1,10 @@
 import os
 import ast
 import numpy as np
-import dbfread as dbf
 import pandas as pd
 import tkinter as tk
 from tkinter import ttk
+import geopandas as gpd
 from classes import Dam
 from tkinter import filedialog
 import matplotlib.pyplot as plt
@@ -237,13 +237,12 @@ def successful_runs(results_dir):
 
     for run_results_dir in dam_nos:
         lhd_id = os.path.basename(run_results_dir)
-        dbf_path = os.path.join(run_results_dir, "VDT", f"{lhd_id}_Local_VDT_Database.dbf")
-        if not os.path.exists(dbf_path):
+        local_vdt_gpkg = os.path.join(run_results_dir, "VDT", f"{lhd_id}_Local_VDT_Database.gpkg")
+        if not os.path.exists(local_vdt_gpkg):
             continue
         try:
-            local_vdt_dbf = dbf.DBF(dbf_path)
-            local_vdt_df = pd.DataFrame(iter(local_vdt_dbf))
-            if not local_vdt_df.empty:
+            local_vdt_gdf = gpd.read_file(local_vdt_gpkg)
+            if not local_vdt_gdf.empty:
                 successes.append(lhd_id)
             else:
                 continue

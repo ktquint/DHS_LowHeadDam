@@ -626,97 +626,97 @@ def create_gpkg_from_lists(
 
 
 
-def main(lhd_csv_path, streams_gpkg_path, ):
-    lhd_df = pd.read_csv(lhd_csv_path)
-    print("finished reading in the LHD Database...")
-
-
-    # sources = ["GEOGLOWS", "USGS", "National Water Model"]
-    sources = ["USGS"]
-
-    # load the nwm ds once
-    ds = None
-    if "National Water Model" in sources:
-        s3_path = 's3://noaa-nwm-retrospective-3-0-pds/CONUS/zarr/chrtout.zarr'
-        ds = xr.open_zarr(s3_path, consolidated=True, storage_options={"anon": True})
-        print("finished reading the Zarr Dataset...")
-
-    comid_list = []
-    fatal_flow_list = [] # flows on fatality dates
-
-    geoglows_gdfs = []
-    usgs_gdfs = []
-    nwm_gdfs = []
-
-    for index, row_i in lhd_df.iterrows():
-        lat = row_i['latitude']
-        lon = row_i['longitude']
-        dam_id = row_i['ID']
-
-        # let's make stream reach objects for each dam location
-        reach = StreamReach(dam_id, lat, lon, sources,
-                            geoglows_streams=streams_gpkg_path, nwm_ds=ds)
-
-        comid_list.append({'dam_id': dam_id,
-                           'linkno': reach.linkno,
-                           'reach_id': reach.reach_id,
-                           'site_no': reach.site_no,})
-
-        if reach.geometry:
-            nwm_gdfs.append(reach.nwm_geom)
-            geoglows_gdfs.append(reach.geoglows_geom)
-            usgs_gdfs.append(reach.usgs_geom)
-
-        # Only call the comparison functions if you have data to compare
-        if len(sources) > 1:
-            if reach.streamflow:
-                # comparisons
-                compare_hydrographs(reach)
-                compare_fdcs(reach)
-
-                # individuals
-                reach.plot_hydrographs()
-                reach.plot_fdcs()
-
-                # now let's look at each estimate for flow on the fatality dates
-                fatality_dates = ast.literal_eval(row_i['fatality_dates'])
-
-                for date_i in fatality_dates:
-                    # let's look at the flows on these days...
-                    geoglows_flow = None
-                    usgs_flow = None
-                    nwm_flow = None
-
-                    if "GEOGLOWS" in sources:
-                        geoglows_flow = reach.get_flow_on_date(date_i, "GEOGLOWS")
-                    if "USGS" in sources:
-                        usgs_flow = reach.get_flow_on_date(date_i, "USGS")
-                    if "National Water Model" in sources:
-                        nwm_flow = reach.get_flow_on_date(date_i, "National Water Model")
-
-
-                    fatal_flow_list.append({'dam_id': dam_id,
-                                            'date': pd.to_datetime(date_i),
-                                            'geoglows_flow': geoglows_flow,
-                                            'usgs_flow': usgs_flow,
-                                            'nwm_flow': nwm_flow,})
-
-                    print(f"GEOGLOWS Streamflow on {date_i}:")
-                    print(geoglows_flow)
-                    print(f"USGS Streamflow on {date_i}:")
-                    print(usgs_flow)
-                    print(f"National Water Model on {date_i}:")
-                    print(nwm_flow)
-
-
-    all_gdfs = [geoglows_gdfs, usgs_gdfs, nwm_gdfs]
-
-    fatal_flow_df = pd.DataFrame(fatal_flow_list)
-    comid_df = pd.DataFrame(comid_list)
-    comid_df.to_csv("E:/LowHead_Dam_COMIDS.csv", index=False)
-    fatal_flow_df.to_csv("E:/LowHead_Dam_Streamflow.csv", index=False)
-    create_gpkg_from_lists(all_gdfs, "E:/LowHead_Dam_AllGpkgs.gpkg", sources)
-
-
-if __name__ == "__main__":
-    main("E:/LowHead_Dam_Missing_USGS.csv", "E:/TDX_HYDRO/streams.gpkg")
+# def main(lhd_csv_path, streams_gpkg_path, ):
+#     lhd_df = pd.read_csv(lhd_csv_path)
+#     print("finished reading in the LHD Database...")
+#
+#
+#     # sources = ["GEOGLOWS", "USGS", "National Water Model"]
+#     sources = ["USGS"]
+#
+#     # load the nwm ds once
+#     ds = None
+#     if "National Water Model" in sources:
+#         s3_path = 's3://noaa-nwm-retrospective-3-0-pds/CONUS/zarr/chrtout.zarr'
+#         ds = xr.open_zarr(s3_path, consolidated=True, storage_options={"anon": True})
+#         print("finished reading the Zarr Dataset...")
+#
+#     comid_list = []
+#     fatal_flow_list = [] # flows on fatality dates
+#
+#     geoglows_gdfs = []
+#     usgs_gdfs = []
+#     nwm_gdfs = []
+#
+#     for index, row_i in lhd_df.iterrows():
+#         lat = row_i['latitude']
+#         lon = row_i['longitude']
+#         dam_id = row_i['ID']
+#
+#         # let's make stream reach objects for each dam location
+#         reach = StreamReach(dam_id, lat, lon, sources,
+#                             geoglows_streams=streams_gpkg_path, nwm_ds=ds)
+#
+#         comid_list.append({'dam_id': dam_id,
+#                            'linkno': reach.linkno,
+#                            'reach_id': reach.reach_id,
+#                            'site_no': reach.site_no,})
+#
+#         if reach.geometry:
+#             nwm_gdfs.append(reach.nwm_geom)
+#             geoglows_gdfs.append(reach.geoglows_geom)
+#             usgs_gdfs.append(reach.usgs_geom)
+#
+#         # Only call the comparison functions if you have data to compare
+#         if len(sources) > 1:
+#             if reach.streamflow:
+#                 # comparisons
+#                 compare_hydrographs(reach)
+#                 compare_fdcs(reach)
+#
+#                 # individuals
+#                 reach.plot_hydrographs()
+#                 reach.plot_fdcs()
+#
+#                 # now let's look at each estimate for flow on the fatality dates
+#                 fatality_dates = ast.literal_eval(row_i['fatality_dates'])
+#
+#                 for date_i in fatality_dates:
+#                     # let's look at the flows on these days...
+#                     geoglows_flow = None
+#                     usgs_flow = None
+#                     nwm_flow = None
+#
+#                     if "GEOGLOWS" in sources:
+#                         geoglows_flow = reach.get_flow_on_date(date_i, "GEOGLOWS")
+#                     if "USGS" in sources:
+#                         usgs_flow = reach.get_flow_on_date(date_i, "USGS")
+#                     if "National Water Model" in sources:
+#                         nwm_flow = reach.get_flow_on_date(date_i, "National Water Model")
+#
+#
+#                     fatal_flow_list.append({'dam_id': dam_id,
+#                                             'date': pd.to_datetime(date_i),
+#                                             'geoglows_flow': geoglows_flow,
+#                                             'usgs_flow': usgs_flow,
+#                                             'nwm_flow': nwm_flow,})
+#
+#                     print(f"GEOGLOWS Streamflow on {date_i}:")
+#                     print(geoglows_flow)
+#                     print(f"USGS Streamflow on {date_i}:")
+#                     print(usgs_flow)
+#                     print(f"National Water Model on {date_i}:")
+#                     print(nwm_flow)
+#
+#
+#     all_gdfs = [geoglows_gdfs, usgs_gdfs, nwm_gdfs]
+#
+#     fatal_flow_df = pd.DataFrame(fatal_flow_list)
+#     comid_df = pd.DataFrame(comid_list)
+#     comid_df.to_csv("E:/LowHead_Dam_COMIDS.csv", index=False)
+#     fatal_flow_df.to_csv("E:/LowHead_Dam_Streamflow.csv", index=False)
+#     create_gpkg_from_lists(all_gdfs, "E:/LowHead_Dam_AllGpkgs.gpkg", sources)
+#
+#
+# if __name__ == "__main__":
+#     main("E:/LowHead_Dam_Missing_USGS.csv", "E:/TDX_HYDRO/streams.gpkg")
