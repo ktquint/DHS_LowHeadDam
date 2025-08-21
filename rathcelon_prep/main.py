@@ -132,10 +132,17 @@ def create_input_file():
         # save the results folder loc.
         dam.assign_output(results_folder)
         # create a stream reach obj. we'll use to download fatal flows and DEM baseflow
-        dam.create_reach(nwm_ds)
-        # estimate the baseflow based on the hydrology option selected
-        dam.est_dem_baseflow()
-        dam.est_fatal_flows()
+        if (hydrology == 'National Water Model'
+            and (row['dem_baseflow_NWM'] is None
+                 or row['fatality_flows_NWM'] is None))\
+            or (hydrology == 'GEOGLOWS'
+                and (row['dem_baseflow_GEOGLOWS'] is None
+                     or row['fatality_flows_GEOGLOWS'] is None)):
+
+            dam.create_reach(nwm_ds)
+            # estimate the baseflow based on the hydrology option selected
+            dam.est_dem_baseflow()
+            dam.est_fatal_flows()
         all_dams.append(dam)
         print(f'Finished Dam No. {row["ID"]}')
 

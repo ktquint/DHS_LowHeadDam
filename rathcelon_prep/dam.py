@@ -15,14 +15,14 @@ class Dam:
         """
         # database info
         self.ID = kwargs['ID']
-        self.name = kwargs['name']
+        self.name = kwargs.get('name', None)
 
         # geographical info
         self.latitude = kwargs['latitude']
         self.longitude = kwargs['longitude']
-        self.city = kwargs['city']
-        self.county = kwargs['county']
-        self.state = kwargs['state']
+        self.city = kwargs.get('city', None)
+        self.county = kwargs.get('county', None)
+        self.state = kwargs.get('state', None)
 
         # fatality info
         self.fatality_dates = ast.literal_eval(kwargs['fatality_dates'])

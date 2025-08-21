@@ -280,7 +280,6 @@ class Dam:
         # fatality dates and fatal flows
         date_str = id_row['fatality_dates'].values[0]
         self.fatality_dates = ast.literal_eval(date_str)
-        print(self.fatality_dates) # dates should be in the form "YYYY-mm-dd"
 
         # ----------------------------------------- HYDROLOGIC INFORMATION ------------------------------------------- #
         """
@@ -383,9 +382,6 @@ class Dam:
         # the rc and vdt gpkgs have the same geometry, so let's merge everything we can
         vdt_rc_gdf = fuzzy_merge(vdt_gdf, rc_gdf, tol=3)
         dam_gdf = fuzzy_merge(vdt_rc_gdf, xs_gdf, tol=3)
-
-        for index, row in dam_gdf.iterrows():
-            print(row[['depth_a', 'depth_b']])
 
         # save tif and xs files for later...
         self.xs_gpkg = xs_gpkg
