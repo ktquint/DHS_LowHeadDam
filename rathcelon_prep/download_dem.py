@@ -231,14 +231,13 @@ def filter_latest_tiles(api_results):
     return [entry[1] for entry in tile_to_item.values()]
 
 
-
 def download_dem(lhd_id: int, lat: float, lon: float, weir_length: float, dem_dir: str, resolution: str):
-
     print("Starting DEM Download Process...")
 
     all_datasets = ["Digital Elevation Model (DEM) 1 meter",
                     "National Elevation Dataset (NED) 1/9 arc-second",
                     "National Elevation Dataset (NED) 1/3 arc-second Current"]
+
     if resolution == "1 m":
         datasets = all_datasets
     elif resolution == "1/9 arc-second (~3 m)":
@@ -247,37 +246,55 @@ def download_dem(lhd_id: int, lat: float, lon: float, weir_length: float, dem_di
         datasets = all_datasets[2:]
 
     # let's check to see if this dam already has a DEM...
-    dem_subdir = os.path.join(dem_dir, f"{lhd_id}_DEM")
+    dem_subdir = os.path.join(dem_dir, str(lhd_id), "DEM")
     os.makedirs(dem_subdir, exist_ok=True)  # if the directory already exists, it won't freak out
     dem_path = os.path.join(dem_subdir, f"{lhd_id}_MERGED_DEM.tif")
 
-    if os.path.isfile(dem_path):
-        print(f"DEM already downloaded at {dem_path}")
-        return dem_subdir, [], None
-
-    # Get coordinates and make API calls to get DEM names
-    print(f"Getting DEM info for {lhd_id}")
-
+    # Calculate bbox for coverage checking
     if pd.isna(weir_length):
         print(f"Warning: weir_length is missing for dam {lhd_id}, skipping")
         return None, [], None
 
+    bounding_dist = 2 * weir_length
+    upper_lat, upper_lon = meters_to_latlon(lat, lon, bounding_dist, bounding_dist)
+    lower_lat, lower_lon = meters_to_latlon(lat, lon, -1 * bounding_dist, -1 * bounding_dist)
+    bbox = (lower_lon, lower_lat, upper_lon, upper_lat)
+
+    # Check if DEM already exists and has good coverage
+    if os.path.isfile(dem_path):
+        print(f"DEM already exists at {dem_path}, checking coverage...")
+        coverage_good = check_bbox_coverage(dem_path, bbox)
+        if coverage_good:
+            print(f"Existing DEM has good coverage")
+            return dem_subdir, [], None
+        else:
+            print(f"Existing DEM has poor coverage, will re-download with different resolution")
+            # Remove the existing DEM so we can try again
+            try:
+                os.remove(dem_path)
+                print(f"Removed existing DEM with poor coverage: {dem_path}")
+            except Exception as e:
+                print(f"Could not remove existing DEM: {e}")
+
+    # Get coordinates and make API calls to get DEM names
+    print(f"Getting DEM info for {lhd_id}")
+
     # Variables to store the final results for this dam
-    final_results = []
     final_titles = []
-    final_download_urls = []
     final_dataset = None
+    coverage_achieved = False
 
     for dataset in datasets:
-        # save teh dataset
+        print(f"\nTrying dataset: {dataset}")
         final_dataset = dataset
+
         try:
             results = query_tnm_api([lat, lon], dataset, weir_length)
             """
-                what we does next depends on the resolution of the DEM, and the number of results
+                what we do next depends on the resolution of the DEM, and the number of results
             """
             if len(results) == 0:
-                print(f"No results for {dataset}...\n Onto the next one!")
+                print(f"No results for {dataset}... Trying next resolution")
                 continue
 
             # let's handle the easiest case next...
@@ -286,7 +303,7 @@ def download_dem(lhd_id: int, lat: float, lon: float, weir_length: float, dem_di
                 final_titles = [sanitize_filename(results[0].get("title", ""))]
                 final_download_urls = [results[0].get("downloadURL")]
 
-            else: # any case where len of results is > 1
+            else:  # any case where len of results is > 1
                 # -------------------- 1-M DEMS -------------------- #
                 if dataset == "Digital Elevation Model (DEM) 1 meter":
                     results = filter_latest_tiles(results)
@@ -295,43 +312,98 @@ def download_dem(lhd_id: int, lat: float, lon: float, weir_length: float, dem_di
                 final_titles = [sanitize_filename(dem.get("title", "")) for dem in final_results]
                 final_download_urls = [dem.get("downloadURL") for dem in final_results]
 
-            # We found results, store the dataset used and break out of the loop
-            break
+            # Download the DEM(s) for this dataset
+            print(f"Downloading DEM for {lhd_id} using {dataset}")
 
-        except requests.RequestException as e:
-            print(f"Error occurred: {e}")
+            if len(final_results) > 1:
+                # Multiple DEMs - download and merge
+                temp_paths = [os.path.join(dem_subdir, f"{title}.tif") for title in final_titles]
+                print(f"Downloading {len(final_results)} tiles...")
 
-    # Download only if merged DEM doesn't exist
-    if final_results:
-        print(f"Downloading DEM for {lhd_id}")
+                for i in range(len(final_results)):
+                    url = final_download_urls[i]
+                    path = temp_paths[i]
+                    print(f"  Downloading tile {i + 1}/{len(final_results)}: {final_titles[i]}")
+                    with requests.get(url, stream=True) as r:
+                        r.raise_for_status()
+                        with open(path, "wb") as f:
+                            for chunk in r.iter_content(chunk_size=8192):
+                                f.write(chunk)
 
-        if len(final_results) > 1:
-            # Multiple DEMs - download and merge
-            temp_paths = [os.path.join(dem_subdir, f"{title}.tif") for title in final_titles]
-            print(temp_paths)
-            for i in range(len(final_results)):
-                url = final_download_urls[i]
-                path = temp_paths[i]
-                with requests.get(url, stream=True) as r:
+                print("Merging tiles...")
+                merge_dems(temp_paths, f"{lhd_id}_MERGED_DEM.tif")
+
+            else:
+                # Single DEM - download directly
+                print(f"Downloading single DEM: {final_titles[0]}")
+                with requests.get(final_download_urls[0], stream=True) as r:
                     r.raise_for_status()
-                    with open(path, "wb") as f:
+                    with open(dem_path, "wb") as f:
                         for chunk in r.iter_content(chunk_size=8192):
                             f.write(chunk)
-            merge_dems(temp_paths, dem_path)
-        else:
-            # Single DEM - download directly
-            with requests.get(final_download_urls[0], stream=True) as r:
-                r.raise_for_status()
-                with open(dem_path, "wb") as f:
-                    for chunk in r.iter_content(chunk_size=8192):
-                        f.write(chunk)
 
-    else:  # if there's no results for any dataset
-        print(f"No DEM data found for {lhd_id}")
+            # Check coverage after download
+            print("Checking DEM coverage...")
+            coverage_good = check_bbox_coverage(dem_path, bbox)
+
+            if coverage_good:
+                print(f"✓ Good coverage achieved with {dataset}")
+                coverage_achieved = True
+                break  # Success! Exit the dataset loop
+            else:
+                print(f"✗ Poor coverage with {dataset}, trying next resolution...")
+                # Remove the failed DEM before trying next resolution
+                try:
+                    if os.path.exists(dem_path):
+                        os.remove(dem_path)
+                        print(f"Removed DEM with poor coverage")
+                except Exception as e:
+                    print(f"Could not remove failed DEM: {e}")
+
+                # Continue to next dataset (don't break)
+                continue
+
+        except requests.RequestException as e:
+            print(f"Error downloading {dataset}: {e}")
+            continue
+
+    # Final results
+    if coverage_achieved:
+        print(f"\n✓ Successfully downloaded DEM for {lhd_id} with good coverage using {final_dataset}")
+        return dem_subdir, final_titles, final_dataset
+    else:
+        print(f"\n✗ No DEM dataset provided adequate coverage for {lhd_id}")
         return None, [], None
-    return dem_subdir, final_titles, final_dataset
 
 
+
+
+
+
+# def main(lhd_csv):
+#     lhd_df = pd.read_csv(lhd_csv)
+#
+#     for _, row in lhd_df.iterrows():
+#         weir_len = row['weir_length']
+#         lat = row['latitude']
+#         lon = row['longitude']
+#         lhd_id = row['ID']
+#
+#         bounding_dist = 2 * weir_len
+#         upper_lat, upper_lon = meters_to_latlon(lat, lon, bounding_dist, bounding_dist)
+#         lower_lat, lower_lon = meters_to_latlon(lat, lon, -1 * bounding_dist, -1 * bounding_dist)
+#
+#         bbox = (lower_lon, lower_lat, upper_lon, upper_lat)
+#         dem_path = row['dem_1m']
+#         dem_path = os.path.join(dem_path, f"{lhd_id}_MERGED_DEM.tif")
+#
+#         coverage = check_bbox_coverage(dem_path, bbox)
+#         print(f'Looking at LHD No. {lhd_id}...')
+#         print(f'Is the dem coverage is good? {coverage}')
+#
+#
+# if __name__ == "__main__":
+#     main("E:\LHD_1-m_NWM\LowHead_Dam_Database.csv")
 
 # def download_dems(lhd_df, dem_dir, resolution):
     # """

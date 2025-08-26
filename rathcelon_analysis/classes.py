@@ -34,6 +34,100 @@ def round_sigfig(num, sig_figs):
         return round(num, sig_figs - int(math.floor(math.log10(abs(num)))) - 1)
 
 
+def merge_databases(cf_database, xs_database):
+    cf_df = pd.read_csv(cf_database)
+    xs_df = pd.read_csv(xs_database, sep='\t')
+    return pd.merge(xs_df, cf_df, on=['COMID', 'Row', 'Col'])
+
+
+def fuzzy_merge(left, right, tol=2):
+    """
+    Perform fuzzy merge based on Row and Col coordinates within tolerance
+    """
+    result_rows = []
+
+    # Get column names to avoid conflicts
+    right_cols_to_add = [col for col in right.columns if col not in ['COMID', 'Row', 'Col']]
+
+    for comid, group_left in left.groupby('COMID'):
+        group_right = right[right['COMID'] == comid].copy()
+
+        if group_right.empty:
+            # No matches for this COMID, add left rows with NaN for right columns
+            for col in right_cols_to_add:
+                group_left = group_left.copy()
+                group_left[col] = np.nan
+            result_rows.append(group_left)
+            continue
+
+        for idx, row_left in group_left.iterrows():
+            # Find matches within tolerance
+            row_diff = abs(group_right['Row'] - row_left['Row'])
+            col_diff = abs(group_right['Col'] - row_left['Col'])
+            matches = group_right[(row_diff <= tol) & (col_diff <= tol)]
+
+            if not matches.empty:
+                # If multiple matches, take the closest one
+                if len(matches) > 1:
+                    distances = row_diff + col_diff
+                    closest_idx = distances.idxmin()
+                    match = matches.loc[closest_idx]
+                else:
+                    match = matches.iloc[0]
+
+                # Create combined row
+                combined_row = row_left.copy()
+                for col in right_cols_to_add:
+                    combined_row[col] = match[col]
+                result_rows.append(combined_row.to_frame().T)
+            else:
+                # No match found, add NaN values for right columns
+                row_with_nans = row_left.copy()
+                for col in right_cols_to_add:
+                    row_with_nans[col] = np.nan
+                result_rows.append(row_with_nans.to_frame().T)
+
+    # Concatenate all results
+    if result_rows:
+        result_df = pd.concat(result_rows, ignore_index=True)
+        return result_df
+    else:
+        return gpd.GeoDataFrame()
+
+
+def merge_arc_results(curve_file: str, local_vdt: str, cross_section: str) -> gpd.GeoDataFrame|pd.DataFrame:
+    # Read files
+    vdt_gdf = gpd.read_file(local_vdt)
+    rc_gdf = gpd.read_file(curve_file)
+    xs_gdf = gpd.read_file(cross_section)
+
+    # Convert list-like strings to actual lists with error handling
+    list_columns = ['XS1_Profile', 'Manning_N_Raster1', 'XS2_Profile', 'Manning_N_Raster2']
+    for col in list_columns:
+        if col in xs_gdf.columns:
+            xs_gdf[col] = xs_gdf[col].apply(lambda x: ast.literal_eval(x) if pd.notna(x) and isinstance(x, str) else x)
+
+    # Drop duplicate 'Ordinate_Dist.1' if it exists and is identical
+    if 'Ordinate_Dist.1' in xs_gdf.columns and 'Ordinate_Dist' in xs_gdf.columns:
+        if xs_gdf['Ordinate_Dist'].equals(xs_gdf['Ordinate_Dist.1']):
+            xs_gdf = xs_gdf.drop(columns=['Ordinate_Dist.1'])
+
+    # Perform fuzzy merge with XS data
+    first_merge = fuzzy_merge(rc_gdf, vdt_gdf, tol=2)
+    results_gdf = fuzzy_merge(first_merge, xs_gdf, tol=2)
+
+    if 'geometry' in results_gdf.columns:
+        results_gdf = gpd.GeoDataFrame(results_gdf, geometry='geometry')
+
+    results_gdf = results_gdf.sort_values(by=["Row", "Col"]).reset_index(drop=True)
+
+    if results_gdf['DEM_Elev'][0] < results_gdf['DEM_Elev'][len(results_gdf)-1]:
+        # this means the cross-sections are going upstream, so let's switch 'em around
+        results_gdf = results_gdf[::-1].reset_index(drop=True)
+
+    return results_gdf
+
+
 class CrossSection:
     def __init__(self, index, xs_row, dam_id, weir_length, fig_dir):
         """
@@ -54,14 +148,13 @@ class CrossSection:
         self.lon = xs_row['Lon']
         self.L = weir_length
         self.index = index
-        if self.index == 4:
+        if self.index == 0:
             self.location = 'Upstream'
-            # upstream cross-section is 1/2 the weir length from the dam
-            self.distance = int(self.L / 2)
+            self.distance = "some" # idk
         else:
             self.location = 'Downstream'
             # downstream cross-sections are one weir length farther than the previous
-            self.distance = int((self.index + 1) * self.L)
+            self.distance = int((self.index) * self.L)
 
         # rating curve info
         self.a = xs_row['depth_a']
@@ -73,15 +166,15 @@ class CrossSection:
         # cross-section plot info
         self.wse = xs_row['Elev']
         # i'll make two lists that i'll populate with just the wse values... you'll see why in a minute
-        INVALID_THRESHOLD = 0
-        y_1 = xs_row['XS1_Profile'][::-1] # since these go from the center out, i'll flip them around
+        INVALID_THRESHOLD = -1e5
+        y_1 = xs_row['XS1_Profile']
         y_2 = xs_row['XS2_Profile']
-        x_1 = [0 + j * xs_row['Ordinate_Dist'] for j in range(len(y_1))]
-        x_2 = [max(x_1) + j * xs_row['Ordinate_Dist'] for j in range(len(y_2))]
+        x_1 = [-1 * xs_row['Ordinate_Dist'] - j * xs_row['Ordinate_Dist'] for j in range(len(y_1))]
+        x_2 = [0 + j * xs_row['Ordinate_Dist'] for j in range(len(y_2))]
 
         # delete any points that contain missing data
-        x = x_1 + x_2
-        y = y_1 + y_2
+        x = x_1[::-1] + x_2
+        y = y_1[::-1] + y_2
 
         # Filter out invalid values
         x_clean = []
@@ -99,11 +192,11 @@ class CrossSection:
         wse_lat_left = []
         # we'll use a while loop
         # on the left side we'll start with the right-most element
-        i = len(y_1) - 1
+        i = 0
         while y_1[i] <= self.wse:
             wse_left.append(self.wse)
             wse_lat_left.append(x_1[i])
-            i -= 1
+            i += 1
 
         # now the right side
         wse_right = []
@@ -114,8 +207,8 @@ class CrossSection:
             wse_lat_right.append(x_2[i])
             i += 1
 
-        self.water_elevation = wse_left + wse_right
-        self.water_lateral = wse_lat_left + wse_lat_right
+        self.water_elevation = wse_left[::-1] + wse_right
+        self.water_lateral = wse_lat_left[::-1] + wse_lat_right
 
         # initialize P, but don't give it a value yet
         self.P = None
@@ -147,17 +240,18 @@ class CrossSection:
         # wse line
         ax.plot(self.water_lateral, self.water_elevation,
                  color='cyan', linestyle='--', label=f'Water Surface Elevation: {self.wse} m')
+        ax.set_xlim(-1.5 * self.L, 1.5 * self.L)
         ax.set_xlabel('Lateral Distance (m)')
         ax.set_ylabel('Elevation (m)')
         ax.set_title(f'{self.location} Cross-Section {self.distance} meters from LHD No. {self.id}')
         ax.legend(loc='upper right')
         # the file name stands for Downstream/Upstream Cross-section No. XX at Low-Head Dam No. XX
-        if self.index == 4:
+        if self.index == 0:
             location = 'US'
             fig_loc = os.path.join(self.fig_dir, f"{location}_XS_LHD_{self.id}.png")
         else:
             location = 'DS'
-            fig_loc = os.path.join(self.fig_dir, f"{location}_XS_{self.index+1}_LHD_{self.id}.png")
+            fig_loc = os.path.join(self.fig_dir, f"{location}_XS_{self.index}_LHD_{self.id}.png")
         fig.savefig(fig_loc)
         return fig
 
@@ -222,8 +316,8 @@ class CrossSection:
         ax.legend(loc='upper left')
 
     def plot_fatal_flows(self, ax):
-        fatal_m = self.a * self.fatal_qs**self.b
-        ax.scatter(self.fatal_qs * 35.315, fatal_m * 3.281,
+        fatal_d = self.a * self.fatal_qs**self.b
+        ax.scatter(self.fatal_qs * 35.315, fatal_d * 3.281,
                  label="Recorded Fatality", marker='o',
                  facecolors='none', edgecolors='black')
 
@@ -243,16 +337,20 @@ class Dam:
     create a Dam based on the BYU LHD IDs
     add cross-sections with information from vdt & cross_section files
     """
-    def __init__(self, lhd_id, lhd_csv, project_dir, hydrology, est_dam):
+    def __init__(self, lhd_id, lhd_csv, hydrology, est_dam):
         #database information
         self.id = int(lhd_id)
+        self.hydrology = hydrology
         lhd_df = pd.read_csv(lhd_csv)
 
-        # create a folder to store figures...
-        results_dir = os.path.join(project_dir, "LHD_Results", str(self.id)) # we'll use this a lot later
-        self.fig_dir = os.path.join(results_dir, "FIGS")
-        os.makedirs(self.fig_dir, exist_ok=True)
+
         id_row = lhd_df[lhd_df['ID'] == self.id].reset_index(drop=True)
+
+        # create a folder to store figures...
+        self.results_dir = id_row['output_dir'].values[0]
+        self.fig_dir = os.path.join(self.results_dir, str(self.id), "FIGS")
+        os.makedirs(self.fig_dir, exist_ok=True)
+
 
         if est_dam:
             # if we need to estimate dam height, we'll create guesses for each cross-section
@@ -306,106 +404,34 @@ class Dam:
 
         # ---------------------------------- READ IN VDT + CROSS-SECTION INFO ---------------------------------------- #
 
-        # find attributes based on the vdt and xs files
-        vdt_gpkg = os.path.join(results_dir, "VDT", f"{self.id}_Local_VDT_Database.gpkg")
-        rc_gpkg = os.path.join(results_dir, "VDT", f"{self.id}_Local_CurveFile.gpkg")
-        xs_gpkg = os.path.join(results_dir, "XS", f"{self.id}_Local_XS_Lines.gpkg")
+        vdt_gpkg = os.path.join(self.results_dir, str(self.id), "VDT", f"{self.id}_Local_VDT_Database.gpkg")
+        rc_gpkg = os.path.join(self.results_dir,  str(self.id), "VDT", f"{self.id}_Local_CurveFile.gpkg")
+        xs_gpkg = os.path.join(self.results_dir,  str(self.id), "XS", f"{self.id}_Local_XS_Lines.gpkg")
 
-        vdt_gdf = gpd.read_file(vdt_gpkg)
-        rc_gdf = gpd.read_file(rc_gpkg)
-        xs_gdf = gpd.read_file(xs_gpkg)
-
-        # convert str columns to lists
-        list_columns = ['XS1_Profile', 'Manning_N_Raster1', 'XS2_Profile', 'Manning_N_Raster2']
-
-        for col in list_columns:
-            xs_gdf[col] = xs_gdf[col].apply(ast.literal_eval)
-
-        # remove duplicated ordinate_dist col
-        if xs_gdf['Ordinate_Dist'].equals(xs_gdf['Ordinate_Dist.1']):
-            xs_gdf = xs_gdf.drop(columns=['Ordinate_Dist.1'])
-
-        def fuzzy_merge(left, right, tol=2):
-            """
-            Perform fuzzy merge based on Row and Col coordinates within tolerance
-            """
-            result_rows = []
-
-            # Get column names to avoid conflicts
-            right_cols_to_add = [col for col in right.columns if col not in ['COMID', 'Row', 'Col']]
-
-            for comid, group_left in left.groupby('COMID'):
-                group_right = right[right['COMID'] == comid].copy()
-
-                if group_right.empty:
-                    # No matches for this COMID, add left rows with NaN for right columns
-                    for col in right_cols_to_add:
-                        group_left = group_left.copy()
-                        group_left[col] = np.nan
-                    result_rows.append(group_left)
-                    continue
-
-                for idx, row_left in group_left.iterrows():
-                    # Find matches within tolerance
-                    row_diff = abs(group_right['Row'] - row_left['Row'])
-                    col_diff = abs(group_right['Col'] - row_left['Col'])
-                    matches = group_right[(row_diff <= tol) & (col_diff <= tol)]
-
-                    if not matches.empty:
-                        # If multiple matches, take the closest one
-                        if len(matches) > 1:
-                            distances = row_diff + col_diff
-                            closest_idx = distances.idxmin()
-                            match = matches.loc[closest_idx]
-                        else:
-                            match = matches.iloc[0]
-
-                        # Create combined row
-                        combined_row = row_left.copy()
-                        for col in right_cols_to_add:
-                            combined_row[col] = match[col]
-                        result_rows.append(combined_row.to_frame().T)
-                    else:
-                        # No match found, add NaN values for right columns
-                        row_with_nans = row_left.copy()
-                        for col in right_cols_to_add:
-                            row_with_nans[col] = np.nan
-                        result_rows.append(row_with_nans.to_frame().T)
-
-            # Concatenate all results
-            if result_rows:
-                result_df = pd.concat(result_rows, ignore_index=True)
-                return result_df
-            else:
-                return gpd.GeoDataFrame()
-
-        # the rc and vdt gpkgs have the same geometry, so let's merge everything we can
-        vdt_rc_gdf = fuzzy_merge(vdt_gdf, rc_gdf, tol=3)
-        dam_gdf = fuzzy_merge(vdt_rc_gdf, xs_gdf, tol=3)
-
+        self.dam_gdf = merge_arc_results(rc_gpkg, vdt_gpkg, xs_gpkg)
         # save tif and xs files for later...
         self.xs_gpkg = xs_gpkg
-        self.bathy_tif = os.path.join(results_dir, "Bathymetry", f"{str(self.id)}_ARC_Bathy.tif")
+        self.bathy_tif = os.path.join(self.results_dir, str(self.id), "Bathymetry", f"{self.id}_ARC_Bathy.tif")
 
 
         # let's go through each row of the df and create cross-sections objects
-        for index, row in dam_gdf.iterrows():
+        for index, row in self.dam_gdf.iterrows():
             self.cross_sections.append(CrossSection(index, row, self.id, self.weir_length, self.fig_dir))
 
 
         # let's add the dam height and slope to the csv
-        for i in range(len(self.cross_sections)-1):
+        for i in range(1, len(self.cross_sections)):
             # add fatal qs to each cross-section
             self.cross_sections[i].set_fatal_qs(self.fatal_flows)
             # add slope info to csv file--it's not too important
             s_i = self.cross_sections[i].slope
-            lhd_df.loc[lhd_df['ID'] == self.id, f's_{i + 1}'] = s_i
+            lhd_df.loc[lhd_df['ID'] == self.id, f's_{i}'] = s_i
             y_ts = []
             y_flips = []
             y_2s = []
 
             if est_dam:
-                delta_wse_i = self.cross_sections[i].wse - self.cross_sections[-1].wse # wse_ds - wse_us
+                delta_wse_i = self.cross_sections[i].wse - self.cross_sections[0].wse # wse_ds - wse_us
 
                 # tailwater using the wse and bed_elevation
                 y_i = self.cross_sections[i].wse - self.cross_sections[i].bed_elevation
@@ -418,7 +444,7 @@ class Dam:
                 if P_i < 1 or P_i > 100:
                     P_i = 3.05 # according to the literature, this is one of the most common dam heights
                 self.cross_sections[i].set_dam_height(P_i)
-                lhd_df.loc[lhd_df['ID'] == self.id, f'P_{i + 1}'] = P_i * 3.281 # convert to ft
+                lhd_df.loc[lhd_df['ID'] == self.id, f'P_{i}'] = P_i * 3.281 # convert to ft
 
                 # now let's add the tailwater, flip, and conjugate depths for each flow/cross-section combo
                 for flow in self.fatal_flows:
@@ -445,16 +471,16 @@ class Dam:
             y_ts_string = str(y_ts)
             y_flips_string = str(y_flips)
             y_2s_string = str(y_2s)
-            lhd_df.loc[lhd_df['ID'] == self.id, f'y_t_{i + 1}'] = y_ts_string
-            lhd_df.loc[lhd_df['ID'] == self.id, f'y_flip_{i + 1}'] = y_flips_string
-            lhd_df.loc[lhd_df['ID'] == self.id, f'y_2_{i + 1}'] = y_2s_string
+            lhd_df.loc[lhd_df['ID'] == self.id, f'y_t_{i}'] = y_ts_string
+            lhd_df.loc[lhd_df['ID'] == self.id, f'y_flip_{i}'] = y_flips_string
+            lhd_df.loc[lhd_df['ID'] == self.id, f'y_2_{i}'] = y_2s_string
 
         # update the csv file
         lhd_df.to_csv(lhd_csv, index=False)
 
 
     def plot_rating_curves(self):
-        for cross_section in self.cross_sections[:-1]:
+        for cross_section in self.cross_sections[1:]:
             cross_section.create_rating_curve()
         plt.xlabel('Flow (m$^{3}$/s)')
         plt.ylabel('Depth (m)')
@@ -471,48 +497,24 @@ class Dam:
 
 
     def plot_all_curves(self):
-        for cross_section in self.cross_sections[:-1]:
+        for cross_section in self.cross_sections[1:]:
             cross_section.create_combined_fig()
 
 
     # noinspection PyTypeChecker
     def plot_map(self):
-        # Step 1: Open raster and reproject to EPSG:3857
-        with rasterio.open(self.bathy_tif) as src:
-            dst_crs = 'EPSG:3857'
-            transform, width, height = calculate_default_transform(
-                src.crs, dst_crs, src.width, src.height, *src.bounds)
-
-            kwargs = src.meta.copy()
-            kwargs.update({
-                'crs': dst_crs,
-                'transform': transform,
-                'width': width,
-                'height': height
-            })
-
-            memfile = MemoryFile()
-            with memfile.open(**kwargs) as dst:
-                for i in range(1, src.count + 1):
-                    reproject(
-                        source=rasterio.band(src, i),
-                        destination=rasterio.band(dst, i),
-                        src_transform=src.transform,
-                        src_crs=src.crs,
-                        dst_transform=transform,
-                        dst_crs=dst_crs,
-                        resampling=Resampling.nearest)
-            reprojected = memfile.open()
-            raster_data = reprojected.read(1)
-            transform = reprojected.transform
 
         # Step 2: Load and reproject shapefile
-        gdf = gpd.read_file(self.xs_gpkg)
-        gdf = gdf.to_crs('EPSG:3857')
+        strm_gpkg = os.path.join(self.results_dir, str(self.id), "STRM", f"{self.id}_StrmShp.gpkg")
+        strm_gdf = gpd.read_file(strm_gpkg)
+        strm_gdf = strm_gdf.to_crs('EPSG:3857')
+
+        xs_gdf = gpd.read_file(self.xs_gpkg)
+        xs_gdf = xs_gdf.to_crs('EPSG:3857')
 
         # Step 3: Set zoom bounds
         buffer = 100  # meters
-        minx, miny, maxx, maxy = gdf.total_bounds
+        minx, miny, maxx, maxy = xs_gdf.total_bounds
         minx -= buffer * 2
         miny -= buffer
         maxx += buffer * 2
@@ -530,13 +532,14 @@ class Dam:
         ctx.add_basemap(ax, crs='EPSG:3857', source=ctx.providers.Esri.WorldImagery, zorder=0)
 
         # Step P-2: Plot raster on top of basemap
-        show(raster_data, transform=transform, ax=ax, cmap='plasma', zorder=1, alpha=0.7)
+        # show(raster_data, transform=transform, ax=ax, cmap='plasma', zorder=1, alpha=0.7)
 
         # Step P-3: Plot shapefile points on top of both
         # separate into upstream and downstream cross-sections
-        gdf_upstream = gdf.iloc[[-1]]
-        gdf_downstream = gdf.iloc[:-1]
-        gdf_upstream.plot(ax=ax, color='green', markersize=100, edgecolor='black', zorder=2, label="Upstream")
+        gdf_upstream = xs_gdf.iloc[[0]]
+        gdf_downstream = xs_gdf.iloc[1:]
+        strm_gdf.plot(ax=ax, color='green', markersize=100, edgecolor='black', zorder=2, label="Flowline")
+        gdf_upstream.plot(ax=ax, color='red', markersize=100, edgecolor='black', zorder=2, label="Upstream")
         gdf_downstream.plot(ax=ax, color='dodgerblue', markersize=100, edgecolor='black', zorder=2, label="Downstream")
 
         # Transformer from raster CRS (e.g., EPSG:3857) to EPSG:4326 (lon/lat)
@@ -563,5 +566,47 @@ class Dam:
         ax.legend(title="Cross-Section Location", title_fontsize="xx-large",
                    loc='upper right', fontsize='x-large')
         ax.set_axis_on()
+        fig.tight_layout()
+        return fig
+
+
+    def plot_water_surface(self):
+        cf_csv = os.path.join(self.results_dir,  str(self.id), "VDT", f"{self.id}_CurveFile.csv")
+        xs_txt = os.path.join(self.results_dir,  str(self.id), "XS", f"{self.id}_XS_Out.txt")
+
+        database_df = merge_databases(cf_csv, xs_txt)
+
+        fig, ax = plt.subplots(figsize=(10, 10))
+
+        ax.plot(database_df.index, database_df['DEM_Elev'], color='dodgerblue', label='DEM Elevation')
+        ax.plot(database_df.index, database_df['BaseElev'], color='black', label='Bed Elevation')
+
+        upstream_xs = self.dam_gdf.iloc[0]
+        upstream_row = upstream_xs['Row']
+        upstream_col = upstream_xs['Col']
+
+        upstream_idx = database_df[(database_df['Row'] == upstream_row)
+                                    & (database_df['Col'] == upstream_col)].index[0]
+
+        ax.scatter(upstream_idx, upstream_xs['DEM_Elev'], label=f'Upstream Elevation')
+
+        for i in range(1, len(self.dam_gdf)):
+            downstream_xs = self.dam_gdf.iloc[i]
+            downstream_row = downstream_xs['Row']
+            downstream_col = downstream_xs['Col']
+
+            downstream_idx = database_df[
+                (database_df["Row"] == downstream_row) &
+                (database_df["Col"] == downstream_col)
+                ].index[0]
+
+            ax.scatter(downstream_idx,
+                       downstream_xs['DEM_Elev'],
+                       label=f'Downstream Elevation No. {i}')
+
+        ax.legend()
+        ax.set_xlabel("Distance Downstream (m)")
+        ax.set_ylabel("Elevation (m)")
+        ax.set_title(f"Water Surface Profile for LHD No. {self.id}")
         fig.tight_layout()
         return fig

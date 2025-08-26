@@ -10,26 +10,6 @@ from tkinter import filedialog
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
-# Function to open folder dialog and insert path into entry box
-def select_project_dir():
-    project_path = filedialog.askdirectory()
-    if project_path:
-        project_entry.delete(0, tk.END)
-        project_entry.insert(0, project_path)
-
-        # autofill database.csv info
-        database_path = [f for f in os.listdir(project_path) if f.endswith('.csv')][0]
-        database_path = os.path.join(project_path, database_path)
-        database_entry.delete(0, tk.END)
-        database_entry.insert(0, database_path)
-
-        # autofill results dir info
-        results_path = os.path.join(project_path, "LHD_Results")
-        results_entry.delete(0, tk.END)
-        results_entry.insert(0, results_path)
-
-        update_dropdown()
-
 
 # noinspection PyBroadException,PyTypeChecker
 def update_dropdown():
@@ -48,7 +28,10 @@ def update_dropdown():
 
 # this guy selects the csv database
 def select_csv_file():
-    file_path = filedialog.askopenfilename()
+    file_path = filedialog.askopenfilename(
+        title="Select a CSV file",
+        filetypes=[("CSV files", "*.csv")]
+    )
     if file_path:
         database_entry.delete(0, tk.END)
         database_entry.insert(0, file_path)
@@ -207,21 +190,32 @@ def plot_rating_curves(dam):
     scrollbar.pack(side="right", fill="y")
 
     # Generate and add figures
-    for cross_section in dam.cross_sections[:-1]:
+    for cross_section in dam.cross_sections[1:]:
         rc_fig = cross_section.create_combined_fig()
         fig_canvas = FigureCanvasTkAgg(rc_fig, master=scroll_frame)
         fig_canvas.draw()
         fig_canvas.get_tk_widget().pack(padx=10, pady=10, fill="both", expand=True)
 
+
 def plot_map(dam):
     map_fig = dam.plot_map()
     # Create a new Tkinter window for the plot
     plot_window = tk.Toplevel(root)
-    plot_window.title("Rating Curves")
+    plot_window.title("Dam Map")
     plot_window.geometry("1200x1000")
 
     # Embed the figure in the Tkinter window
     canvas = FigureCanvasTkAgg(map_fig, master=plot_window)
+    canvas.draw()
+    canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+
+def plot_wsp(dam):
+    wsp_fig = dam.plot_water_surface()
+    plot_window = tk.Toplevel(root)
+    plot_window.title("Rating Curves")
+    plot_window.geometry("1200x1000")
+    # Embed the figure in the Tkinter window
+    canvas = FigureCanvasTkAgg(wsp_fig, master=plot_window)
     canvas.draw()
     canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
@@ -254,7 +248,6 @@ def successful_runs(results_dir):
 # Your custom function using the folder path from the entry
 def process_ARC():
     # project_dir holds all the project files
-    project_dir = project_entry.get()
     database_csv = database_entry.get()
     results_dir = results_entry.get()
 
@@ -268,7 +261,7 @@ def process_ARC():
         dam_ints = sorted([int(d) for d in dam_strs])
         for dam_id in dam_ints:
             print(f"Analyzing Dam No. {dam_id}")
-            dam_i = Dam(int(dam_id), database_csv, project_dir, selected_model, estimate_dam)
+            dam_i = Dam(int(dam_id), database_csv, selected_model, estimate_dam)
             # dam_i.plot_rating_curves()
             # xs_fig = dam_i.plot_cross_sections()
             # dam_i.plot_all_curves()
@@ -281,14 +274,18 @@ def process_ARC():
                 plot_rating_curves(dam_i)
             if display_map.get():
                 plot_map(dam_i)
+            if display_wsp.get():
+                plot_wsp(dam_i)
     else:
-        dam_i = Dam(int(dropdown.get()), database_csv, project_dir, selected_model, estimate_dam)
+        dam_i = Dam(int(dropdown.get()), database_csv, selected_model, estimate_dam)
         if display_cross_section.get():
             plot_cross_section(dam_i)
         if display_rating_curves.get():
             plot_rating_curves(dam_i)
         if display_map.get():
             plot_map(dam_i)
+        if display_wsp.get():
+            plot_wsp(dam_i)
 
 
 # GUI setup
@@ -299,14 +296,6 @@ root.geometry("600x800")
 # Database label
 section_label = tk.Label(root, text="Database Information", font=("Arial", 12, "bold"))
 section_label.pack(pady=(15, 0))
-
-# --- Project Directory Selection ---
-project_frame = tk.Frame(root)
-project_frame.pack(pady=10, padx=10, fill=tk.X)
-
-tk.Button(project_frame, text="Select Folder", command=select_project_dir).pack(side=tk.LEFT)
-project_entry = tk.Entry(project_frame)
-project_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=10)
 
 # --- Database Selection ---
 database_frame = tk.Frame(root)
@@ -382,6 +371,13 @@ display_map = tk.BooleanVar()
 display_map.set(True)# default checked
 display_checkbox = ttk.Checkbutton(root, text="Dam Location", variable=display_map)
 display_checkbox.pack(pady=(5, 10))
+
+# water surface checkbox
+display_wsp = tk.BooleanVar()
+display_wsp.set(True)# default checked
+display_checkbox = ttk.Checkbutton(root, text="Water Surface Profile", variable=display_wsp)
+display_checkbox.pack(pady=(5, 10))
+
 
 # --- Run function button ---
 run_button = tk.Button(root, text="Process ARC Data", command=process_ARC, height=2, width=20)

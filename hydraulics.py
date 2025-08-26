@@ -142,19 +142,19 @@ def est_yT(Q: float, T: float, S_fr: float, n: float=0.035, y0: float=1.0):
     y_solution, = fsolve(func, y0)
     return y_solution
 
-Q = np.linspace(1, 1000, 100)
-Ts = np.linspace(20, 1000, 50)
-T = 60
-Ss = np.linspace(0.0002, 0.002, 9)
-S = 0.002
-delta_WSE = -3.0
-WSEs = np.linspace(1, 10, 10)
-
-cmap = cm.viridis
-colors = cmap(np.linspace(0, 1, len(Ts)))
-
-cmap2 = cm.viridis
-colors2 = cmap(np.linspace(0, 1, len(Ss)))
+# Q = np.linspace(1, 1000, 100)
+# Ts = np.linspace(20, 1000, 50)
+# T = 60
+# Ss = np.linspace(0.0002, 0.002, 9)
+# S = 0.002
+# delta_WSE = -3.0
+# WSEs = np.linspace(1, 10, 10)
+#
+# cmap = cm.viridis
+# colors = cmap(np.linspace(0, 1, len(Ts)))
+#
+# cmap2 = cm.viridis
+# colors2 = cmap(np.linspace(0, 1, len(Ss)))
 
 
 # for T, c in zip(Ts, colors):
@@ -176,45 +176,45 @@ colors2 = cmap(np.linspace(0, 1, len(Ss)))
 # # plt.legend(title='Top Width 60 (m)')
 # plt.show()
 
-import plotly.graph_objects as go
-
-fig = go.Figure()
-
-# Loop over S values and add a surface for each
-
-for j, S in enumerate(Ss):  # use j as index for slopes
-    # Create meshgrid
-    Q_grid, T_grid = np.meshgrid(Q, Ts)
-
-    # Compute P at each (Q, T) for this S
-    P_grid = np.zeros_like(Q_grid)
-    for i, T in enumerate(Ts):
-        yT = np.vectorize(est_yT)(Q, T, S)
-        P_grid[i, :] = np.vectorize(dam_height)(Q, T, delta_WSE, yT)
-
-    # Add the surface
-    fig.add_trace(go.Surface(
-        x=Q_grid,
-        y=T_grid,
-        z=P_grid,
-        name=f"S={S:.4f}",
-        colorscale="Viridis",
-        coloraxis="coloraxis",   # <--- tie all surfaces to one coloraxis
-        showscale=False,         # no per-surface colorbars
-        opacity=0.8
-    ))
-
-fig.update_layout(
-    title='Dam Height vs Discharge and Top Width for multiple Slopes',
-    scene=dict(
-        xaxis_title='Discharge (Q, cms)',
-        yaxis_title='Top Width (T, m)',
-        zaxis_title='Dam Height (P, m)'
-    ),
-    width=900,
-    height=700,
-)
-
-
-
-fig.show()
+# import plotly.graph_objects as go
+#
+# fig = go.Figure()
+#
+# # Loop over S values and add a surface for each
+#
+# for j, S in enumerate(Ss):  # use j as index for slopes
+#     # Create meshgrid
+#     Q_grid, T_grid = np.meshgrid(Q, Ts)
+#
+#     # Compute P at each (Q, T) for this S
+#     P_grid = np.zeros_like(Q_grid)
+#     for i, T in enumerate(Ts):
+#         yT = np.vectorize(est_yT)(Q, T, S)
+#         P_grid[i, :] = np.vectorize(dam_height)(Q, T, delta_WSE, yT)
+#
+#     # Add the surface
+#     fig.add_trace(go.Surface(
+#         x=Q_grid,
+#         y=T_grid,
+#         z=P_grid,
+#         name=f"S={S:.4f}",
+#         colorscale="Viridis",
+#         coloraxis="coloraxis",   # <--- tie all surfaces to one coloraxis
+#         showscale=False,         # no per-surface colorbars
+#         opacity=0.8
+#     ))
+#
+# fig.update_layout(
+#     title='Dam Height vs Discharge and Top Width for multiple Slopes',
+#     scene=dict(
+#         xaxis_title='Discharge (Q, cms)',
+#         yaxis_title='Top Width (T, m)',
+#         zaxis_title='Dam Height (P, m)'
+#     ),
+#     width=900,
+#     height=700,
+# )
+#
+#
+#
+# fig.show()

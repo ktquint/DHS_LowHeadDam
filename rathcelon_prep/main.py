@@ -21,7 +21,7 @@ def select_project_dir():
         database_entry.insert(0, database_path)
 
         # ---------------- DEM INFO ------------------- #
-        dem_path = os.path.join(project_path, "LHD_DEMs")
+        dem_path = os.path.join(project_path, "LHD_Results/{ID}/DEM")
         dem_entry.delete(0, tk.END)
         dem_entry.insert(0, dem_path)
         # -------------- HYDROGRAPHY INFO --------------- #
@@ -59,8 +59,8 @@ def select_dem_dir():
 def select_strm_dir():
     strm_path = filedialog.askdirectory()
     if strm_path:
-        dem_entry.delete(0, tk.END)
-        dem_entry.insert(0, strm_path)
+        strm_entry.delete(0, tk.END)
+        strm_entry.insert(0, strm_path)
 
 
 def select_results_dir():
@@ -95,9 +95,10 @@ def create_input_file():
     dem_resolution = dd_var.get()
     hydrology = logy_var.get()
 
-    # these are where I'll store the DEMs and STRM.gpkg's
-    dem_folder = dem_entry.get()
+    # the standard option will be to
+    dem_folder = results_entry.get()
     os.makedirs(dem_folder, exist_ok=True)
+    # this is where I'll store the STRM.gpkg's
     strm_folder = strm_entry.get()
     os.makedirs(strm_folder, exist_ok=True)
     # this is where I'll store the RathCelon output
