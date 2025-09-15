@@ -220,6 +220,33 @@ def plot_wsp(dam):
     canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
 
+def plot_fdc(dam):
+    # Create new window
+    win = tk.Toplevel()
+    win.title("All Flow-Duration Curves")
+    win.geometry("800x800")
+
+    # Create a canvas with scrollbar
+    canvas = tk.Canvas(win)
+    scrollbar = ttk.Scrollbar(win, orient="vertical", command=canvas.yview)
+    scroll_frame = ttk.Frame(canvas)
+
+    scroll_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+    canvas.create_window((0, 0), window=scroll_frame, anchor="nw")
+    canvas.configure(yscrollcommand=scrollbar.set)
+
+    canvas.pack(side="left", fill="both", expand=True)
+    scrollbar.pack(side="right", fill="y")
+
+    # Generate and add figures
+    for cross_section in dam.cross_sections[1:]:
+        rc_fig = cross_section.create_combined_fig()
+        fig_canvas = FigureCanvasTkAgg(rc_fig, master=scroll_frame)
+        fig_canvas.draw()
+        fig_canvas.get_tk_widget().pack(padx=10, pady=10, fill="both", expand=True)
+
+
+
 def successful_runs(results_dir):
     dam_nos = [str(d) for d in os.listdir(results_dir) if d != '.DS_Store']
     # make a list of all the directories with results
@@ -378,6 +405,11 @@ display_wsp.set(True)# default checked
 display_checkbox = ttk.Checkbutton(root, text="Water Surface Profile", variable=display_wsp)
 display_checkbox.pack(pady=(5, 10))
 
+# flow-duration curve checkbox
+display_fdc = tk.BooleanVar()
+display_fdc.set(True)# default checked
+display_checkbox = ttk.Checkbutton(root, text="Flow-Duration Curve", variable=display_fdc)
+display_checkbox.pack(pady=(5, 10))
 
 # --- Run function button ---
 run_button = tk.Button(root, text="Process ARC Data", command=process_ARC, height=2, width=20)

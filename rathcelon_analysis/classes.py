@@ -327,7 +327,25 @@ class CrossSection:
         self.plot_flip_sequent(ax)
         self.plot_fatal_flows(ax)
         # the file name stands for Rating Curve No. XX at Low-Head Dam No. XX
-        fig_loc = os.path.join(self.fig_dir, f"RC_{self.index+1}_LHD_{self.id}.png")
+        fig_loc = os.path.join(self.fig_dir, f"RC_{self.index}_LHD_{self.id}.png")
+        fig.savefig(fig_loc)
+        return fig
+
+
+    def plot_fdc(self, ax):
+        print(ax)
+
+
+    def plot_fdc_flows(self, ax):
+        print(ax)
+
+
+    def create_combined_fdc(self):
+        fig, ax = plt.subplots()
+        self.plot_fdc(ax)
+        self.plot_fdc_flows(ax)
+        # the file name stands for Rating Curve No. XX at Low-Head Dam No. XX
+        fig_loc = os.path.join(self.fig_dir, f"FDC_{self.index}_LHD_{self.id}.png")
         fig.savefig(fig_loc)
         return fig
 

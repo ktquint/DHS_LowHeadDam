@@ -1,4 +1,6 @@
+import os
 import ast
+import pandas as pd
 import hydroinformatics as hi
 from download_dem import download_dem
 from dem_baseflow import est_dem_baseflow
@@ -132,6 +134,23 @@ class Dam:
 
     def assign_reach(self, stream_reach):
         self.dam_reach = stream_reach
+
+
+    def fdc_to_csv(self) -> None:
+        fdc_results = self.dam_reach.export_fdcs()
+        fdc_df = pd.DataFrame()
+
+        for source, (exceedance, flows) in fdc_results.items():
+            if source == self.hydrology:
+                fdc_df = pd.DataFrame(
+                    {
+                        "Exceedance (%)": exceedance,
+                        "Flow (cms)": flows
+                    })
+        flow_dir = os.path.join(self.output_dir, str(self.ID), "FLOW")
+        os.makedirs(flow_dir, exist_ok=True)
+        csv_path = os.path.join(flow_dir, f"{self.ID}_{self.hydrology}_FDC.csv")
+        fdc_df.to_csv(str(csv_path), index=False)
 
 
     def __repr__(self):

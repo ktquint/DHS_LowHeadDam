@@ -134,16 +134,18 @@ def create_input_file():
         dam.assign_output(results_folder)
         # create a stream reach obj. we'll use to download fatal flows and DEM baseflow
         if (hydrology == 'National Water Model'
-            and (row['dem_baseflow_NWM'] is None
-                 or row['fatality_flows_NWM'] is None))\
-            or (hydrology == 'GEOGLOWS'
-                and (row['dem_baseflow_GEOGLOWS'] is None
-                     or row['fatality_flows_GEOGLOWS'] is None)):
+            and (pd.isna(row['dem_baseflow_NWM'])
+                 or pd.isna(row['fatality_flows_NWM']))) \
+                or (hydrology == 'GEOGLOWS'
+                    and (pd.isna(row['dem_baseflow_GEOGLOWS'])
+                         or pd.isna(row['fatality_flows_GEOGLOWS']))):
 
+            print('about to create the reach...')
             dam.create_reach(nwm_ds)
             # estimate the baseflow based on the hydrology option selected
             dam.est_dem_baseflow()
             dam.est_fatal_flows()
+        dam.fdc_to_csv()
         all_dams.append(dam)
         print(f'Finished Dam No. {row["ID"]}')
 
