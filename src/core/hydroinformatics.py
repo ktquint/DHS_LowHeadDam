@@ -111,7 +111,7 @@ class StreamReach:
 
     def _load_data(self):
         valid_sources = False
-        metadata_path = "./geoglows_metadata.parquet"
+        metadata_path = "../data/geoglows_metadata.parquet"
 
         if "GEOGLOWS" in self.data_sources:
             if not os.path.isfile(metadata_path):

@@ -4,9 +4,11 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="a629c241-b42d-4445-a676-01ca5d3cdb55" name="Changes" comment="Updated download_stream.py, added working link to download streams from geoglows.">
+    <list default="true" id="a629c241-b42d-4445-a676-01ca5d3cdb55" name="Changes" comment="should have committed earlier... not sure why I didn't">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/rathcelon_prep/download_dem.py" beforeDir="false" afterPath="$PROJECT_DIR$/rathcelon_prep/download_dem.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/rathcelon_analysis/classes.py" beforeDir="false" afterPath="$PROJECT_DIR$/rathcelon_analysis/classes.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/rathcelon_analysis/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/rathcelon_analysis/main.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/rathcelon_prep/dam.py" beforeDir="false" afterPath="$PROJECT_DIR$/rathcelon_prep/dam.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -32,7 +34,7 @@
   <component name="GithubPullRequestsUISettings">{
   &quot;selectedUrlAndAccountId&quot;: {
     &quot;url&quot;: &quot;https://github.com/ktquint/DHS_LowHeadDam&quot;,
-    &quot;accountId&quot;: &quot;2f3f8a21-2d68-4296-a472-cd78a722642c&quot;
+    &quot;accountId&quot;: &quot;050829bf-ef17-456c-acdb-7dc6168f643e&quot;
   }
 }</component>
   <component name="HighlightingSettingsPerFile">
@@ -49,47 +51,53 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "Python.DEM_Titles_download_attempt_scratch.executor": "Run",
-    "Python.Date_Scratch_File.executor": "Run",
-    "Python.Download DEM (start-end date) scratch.executor": "Run",
-    "Python.Hydroviewerlatlon.executor": "Run",
-    "Python.Stream_Download_Scratch.executor": "Run",
-    "Python.classes.executor": "Run",
-    "Python.dem_baseflow.executor": "Run",
-    "Python.download_dem.executor": "Run",
-    "Python.download_stream.executor": "Run",
-    "Python.main.executor": "Run",
-    "Python.scratch.executor": "Run",
-    "Python.stream.slope.executor": "Run",
-    "Python.stream_slope.executor": "Run",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "git-widget-placeholder": "main",
-    "last_opened_file_path": "C:/Users/pgordi",
-    "node.js.detected.package.eslint": "true",
-    "node.js.detected.package.tslint": "true",
-    "node.js.selected.package.eslint": "(autodetect)",
-    "node.js.selected.package.tslint": "(autodetect)",
-    "nodejs_package_manager_path": "npm",
-    "settings.editor.selected.configurable": "com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable",
-    "vue.rearranger.settings.migration": "true"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;Python.DEM_Titles_download_attempt_scratch.executor&quot;: &quot;Run&quot;,
+    &quot;Python.Date_Scratch_File.executor&quot;: &quot;Run&quot;,
+    &quot;Python.Download DEM (start-end date) scratch.executor&quot;: &quot;Run&quot;,
+    &quot;Python.Hydroviewerlatlon.executor&quot;: &quot;Run&quot;,
+    &quot;Python.Stream_Download_Scratch.executor&quot;: &quot;Run&quot;,
+    &quot;Python.classes.executor&quot;: &quot;Run&quot;,
+    &quot;Python.dem_baseflow.executor&quot;: &quot;Run&quot;,
+    &quot;Python.download_dem.executor&quot;: &quot;Run&quot;,
+    &quot;Python.download_stream.executor&quot;: &quot;Run&quot;,
+    &quot;Python.figures.executor&quot;: &quot;Run&quot;,
+    &quot;Python.hydraulics.executor&quot;: &quot;Run&quot;,
+    &quot;Python.hydroinformatics.executor&quot;: &quot;Run&quot;,
+    &quot;Python.main (1).executor&quot;: &quot;Run&quot;,
+    &quot;Python.main (2).executor&quot;: &quot;Run&quot;,
+    &quot;Python.main.executor&quot;: &quot;Run&quot;,
+    &quot;Python.scratch.executor&quot;: &quot;Run&quot;,
+    &quot;Python.stream.slope.executor&quot;: &quot;Run&quot;,
+    &quot;Python.stream_slope.executor&quot;: &quot;Run&quot;,
+    &quot;Python.xs_and_vdt.executor&quot;: &quot;Run&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;last_opened_file_path&quot;: &quot;C:/Users/pgordi&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.keymap&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   },
-  "keyToStringList": {
-    "com.intellij.ide.scratch.ScratchImplUtil$2/New Scratch File": [
-      "Python",
-      "PLAIN_TEXT",
-      "GitIgnore"
+  &quot;keyToStringList&quot;: {
+    &quot;com.intellij.ide.scratch.ScratchImplUtil$2/New Scratch File&quot;: [
+      &quot;Python&quot;,
+      &quot;PLAIN_TEXT&quot;,
+      &quot;GitIgnore&quot;
     ]
   }
-}]]></component>
+}</component>
   <component name="PyCoverageOptionsProvider">
     <option name="myUseBundledCoveragePy" value="true" />
   </component>
-  <component name="RunManager" selected="Python.download_dem">
-    <configuration name="DEM_Titles_download_attempt_scratch" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+  <component name="RunManager" selected="Python.scratch">
+    <configuration name="classes" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
       <module name="DHS_LowHeadDam" />
       <option name="ENV_FILES" value="" />
       <option name="INTERPRETER_OPTIONS" value="" />
@@ -98,55 +106,12 @@
         <env name="PYTHONUNBUFFERED" value="1" />
       </envs>
       <option name="SDK_HOME" value="" />
-      <option name="WORKING_DIRECTORY" value="$APPLICATION_CONFIG_DIR$/scratches/Date_Scratch_FileDate_Scratch_File/Scripts" />
-      <option name="IS_MODULE_SDK" value="false" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/rathcelon_analysis" />
+      <option name="IS_MODULE_SDK" value="true" />
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
-      <option name="SCRIPT_NAME" value="$APPLICATION_CONFIG_DIR$/scratches/Date_Scratch_FileDate_Scratch_File/Scripts/DEM_Titles_download_attempt_scratch.py" />
-      <option name="PARAMETERS" value="" />
-      <option name="SHOW_COMMAND_LINE" value="false" />
-      <option name="EMULATE_TERMINAL" value="false" />
-      <option name="MODULE_MODE" value="false" />
-      <option name="REDIRECT_INPUT" value="false" />
-      <option name="INPUT_FILE" value="" />
-      <method v="2" />
-    </configuration>
-    <configuration name="Download DEM (start-end date) scratch" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
-      <module name="DHS_LowHeadDam" />
-      <option name="ENV_FILES" value="" />
-      <option name="INTERPRETER_OPTIONS" value="" />
-      <option name="PARENT_ENVS" value="true" />
-      <envs>
-        <env name="PYTHONUNBUFFERED" value="1" />
-      </envs>
-      <option name="SDK_HOME" value="" />
-      <option name="WORKING_DIRECTORY" value="$APPLICATION_CONFIG_DIR$/scratches" />
-      <option name="IS_MODULE_SDK" value="false" />
-      <option name="ADD_CONTENT_ROOTS" value="true" />
-      <option name="ADD_SOURCE_ROOTS" value="true" />
-      <option name="SCRIPT_NAME" value="$APPLICATION_CONFIG_DIR$/scratches/Download DEM (start-end date) scratch.py" />
-      <option name="PARAMETERS" value="" />
-      <option name="SHOW_COMMAND_LINE" value="false" />
-      <option name="EMULATE_TERMINAL" value="false" />
-      <option name="MODULE_MODE" value="false" />
-      <option name="REDIRECT_INPUT" value="false" />
-      <option name="INPUT_FILE" value="" />
-      <method v="2" />
-    </configuration>
-    <configuration name="Hydroviewerlatlon" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
-      <module name="DHS_LowHeadDam" />
-      <option name="ENV_FILES" value="" />
-      <option name="INTERPRETER_OPTIONS" value="" />
-      <option name="PARENT_ENVS" value="true" />
-      <envs>
-        <env name="PYTHONUNBUFFERED" value="1" />
-      </envs>
-      <option name="SDK_HOME" value="" />
-      <option name="WORKING_DIRECTORY" value="$APPLICATION_CONFIG_DIR$/scratches/Date_Scratch_FileDate_Scratch_File" />
-      <option name="IS_MODULE_SDK" value="false" />
-      <option name="ADD_CONTENT_ROOTS" value="true" />
-      <option name="ADD_SOURCE_ROOTS" value="true" />
-      <option name="SCRIPT_NAME" value="$APPLICATION_CONFIG_DIR$/scratches/Date_Scratch_FileDate_Scratch_File/Hydroviewerlatlon.py" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/rathcelon_analysis/classes.py" />
       <option name="PARAMETERS" value="" />
       <option name="SHOW_COMMAND_LINE" value="false" />
       <option name="EMULATE_TERMINAL" value="false" />
@@ -168,6 +133,7 @@
       <option name="IS_MODULE_SDK" value="true" />
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
       <option name="SCRIPT_NAME" value="$PROJECT_DIR$/rathcelon_prep/download_dem.py" />
       <option name="PARAMETERS" value="" />
       <option name="SHOW_COMMAND_LINE" value="false" />
@@ -177,7 +143,7 @@
       <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
-    <configuration name="main" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+    <configuration name="main (1)" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
       <module name="DHS_LowHeadDam" />
       <option name="ENV_FILES" value="" />
       <option name="INTERPRETER_OPTIONS" value="" />
@@ -190,7 +156,54 @@
       <option name="IS_MODULE_SDK" value="true" />
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
       <option name="SCRIPT_NAME" value="$PROJECT_DIR$/rathcelon_prep/main.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="main (2)" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="DHS_LowHeadDam" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/rathcelon_analysis" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/rathcelon_analysis/main.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="scratch" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="DHS_LowHeadDam" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$APPLICATION_CONFIG_DIR$/scratches" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="SCRIPT_NAME" value="$APPLICATION_CONFIG_DIR$/scratches/scratch.py" />
       <option name="PARAMETERS" value="" />
       <option name="SHOW_COMMAND_LINE" value="false" />
       <option name="EMULATE_TERMINAL" value="false" />
@@ -201,18 +214,19 @@
     </configuration>
     <recent_temporary>
       <list>
+        <item itemvalue="Python.scratch" />
+        <item itemvalue="Python.main (1)" />
+        <item itemvalue="Python.main (2)" />
+        <item itemvalue="Python.classes" />
         <item itemvalue="Python.download_dem" />
-        <item itemvalue="Python.DEM_Titles_download_attempt_scratch" />
-        <item itemvalue="Python.Download DEM (start-end date) scratch" />
-        <item itemvalue="Python.main" />
-        <item itemvalue="Python.Hydroviewerlatlon" />
       </list>
     </recent_temporary>
   </component>
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
-        <option value="bundled-python-sdk-fc1d50d2d915-aa17d162503b-com.jetbrains.pycharm.community.sharedIndexes.bundled-PC-243.24978.54" />
+        <option value="bundled-js-predefined-d6986cc7102b-5c90d61e3bab-JavaScript-PY-242.23726.102" />
+        <option value="bundled-python-sdk-5e1850174b45-399fe30bd8c1-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-242.23726.102" />
       </set>
     </attachedChunks>
   </component>
@@ -241,6 +255,38 @@
       <workItem from="1747249894198" duration="597000" />
       <workItem from="1747339783198" duration="5316000" />
       <workItem from="1747843677740" duration="10267000" />
+      <workItem from="1752506953128" duration="180000" />
+      <workItem from="1752507158951" duration="13254000" />
+      <workItem from="1752599613520" duration="27279000" />
+      <workItem from="1752774755631" duration="899000" />
+      <workItem from="1752778362120" duration="184000" />
+      <workItem from="1752779222991" duration="2265000" />
+      <workItem from="1752853186630" duration="1355000" />
+      <workItem from="1753127697194" duration="2381000" />
+      <workItem from="1753200132473" duration="647000" />
+      <workItem from="1753719933584" duration="1841000" />
+      <workItem from="1753801716117" duration="33598000" />
+      <workItem from="1753980128445" duration="2434000" />
+      <workItem from="1754062207837" duration="2551000" />
+      <workItem from="1754076039424" duration="635000" />
+      <workItem from="1755291081612" duration="2977000" />
+      <workItem from="1755299522894" duration="2837000" />
+      <workItem from="1755530837418" duration="10859000" />
+      <workItem from="1755616152502" duration="13002000" />
+      <workItem from="1755703378154" duration="16557000" />
+      <workItem from="1755793738241" duration="11210000" />
+      <workItem from="1755889589600" duration="49000" />
+      <workItem from="1755892924280" duration="1640000" />
+      <workItem from="1755894591429" duration="6694000" />
+      <workItem from="1756136819244" duration="36642000" />
+      <workItem from="1756502239536" duration="1272000" />
+      <workItem from="1757963506981" duration="916000" />
+      <workItem from="1757992495236" duration="2683000" />
+      <workItem from="1758028310279" duration="4376000" />
+      <workItem from="1758051573526" duration="8767000" />
+      <workItem from="1758730873294" duration="11891000" />
+      <workItem from="1759419334111" duration="1319000" />
+      <workItem from="1759764820740" duration="3200000" />
     </task>
     <task id="LOCAL-00001" summary="paige's work">
       <option name="closed" value="true" />
@@ -354,7 +400,79 @@
       <option name="project" value="LOCAL" />
       <updated>1747422530704</updated>
     </task>
-    <option name="localTasksCounter" value="15" />
+    <task id="LOCAL-00015" summary="redownloaded the project to fix the big file problems">
+      <option name="closed" value="true" />
+      <created>1752507221745</created>
+      <option name="number" value="00015" />
+      <option name="presentableId" value="LOCAL-00015" />
+      <option name="project" value="LOCAL" />
+      <updated>1752507221745</updated>
+    </task>
+    <task id="LOCAL-00016" summary="hydroinformatics works... but on the jordan canal the NWM latched onto the wrong stream... and on no. 66 the NWM flows are SUPER low... weird">
+      <option name="closed" value="true" />
+      <created>1752522278340</created>
+      <option name="number" value="00016" />
+      <option name="presentableId" value="LOCAL-00016" />
+      <option name="project" value="LOCAL" />
+      <updated>1752522278340</updated>
+    </task>
+    <task id="LOCAL-00017" summary="worked on downloading nhdplus hydrography based on usgs streamgage no. it's a lot faster than my last version lol... i'll work on applying the logic here to the lhds">
+      <option name="closed" value="true" />
+      <created>1752697265522</created>
+      <option name="number" value="00017" />
+      <option name="presentableId" value="LOCAL-00017" />
+      <option name="project" value="LOCAL" />
+      <updated>1752697265522</updated>
+    </task>
+    <task id="LOCAL-00018" summary="revamped the rathcelon prep... will need to redo the boundary check for dems...">
+      <option name="closed" value="true" />
+      <created>1753899578745</created>
+      <option name="number" value="00018" />
+      <option name="presentableId" value="LOCAL-00018" />
+      <option name="project" value="LOCAL" />
+      <updated>1753899578745</updated>
+    </task>
+    <task id="LOCAL-00019" summary="removed some unnecessary print statements">
+      <option name="closed" value="true" />
+      <created>1753902545859</created>
+      <option name="number" value="00019" />
+      <option name="presentableId" value="LOCAL-00019" />
+      <option name="project" value="LOCAL" />
+      <updated>1753902545859</updated>
+    </task>
+    <task id="LOCAL-00020" summary="the prep and analysis work for the new gpkg rathcelon output">
+      <option name="closed" value="true" />
+      <created>1755642849643</created>
+      <option name="number" value="00020" />
+      <option name="presentableId" value="LOCAL-00020" />
+      <option name="project" value="LOCAL" />
+      <updated>1755642849643</updated>
+    </task>
+    <task id="LOCAL-00021" summary="added cool plot to hydraulics.py">
+      <option name="closed" value="true" />
+      <created>1755804631393</created>
+      <option name="number" value="00021" />
+      <option name="presentableId" value="LOCAL-00021" />
+      <option name="project" value="LOCAL" />
+      <updated>1755804631393</updated>
+    </task>
+    <task id="LOCAL-00022" summary="added water surface profile to rath analysis">
+      <option name="closed" value="true" />
+      <created>1756237127474</created>
+      <option name="number" value="00022" />
+      <option name="presentableId" value="LOCAL-00022" />
+      <option name="project" value="LOCAL" />
+      <updated>1756237127474</updated>
+    </task>
+    <task id="LOCAL-00023" summary="should have committed earlier... not sure why I didn't">
+      <option name="closed" value="true" />
+      <created>1757976582288</created>
+      <option name="number" value="00023" />
+      <option name="presentableId" value="LOCAL-00023" />
+      <option name="project" value="LOCAL" />
+      <updated>1757976582288</updated>
+    </task>
+    <option name="localTasksCounter" value="24" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -395,38 +513,44 @@
     <MESSAGE value="Consolidated Get_Start_Date and get_dem_dates into one function. Added the updated get_dem_dates function into classes.py and added it to the dam class" />
     <MESSAGE value="Changed get_streamflow to take a lat lon instead of a date, will add get_dem_dates to get the dates" />
     <MESSAGE value="Wrote formula for get_streamflow&#10;Formula pulls the data for the comid.&#10;It then determines if the date is %Y-%m-%d, %Y-%m, or %Y and puts the data for the date into a dataframe.&#10;It then finds the median value of that data." />
-    <option name="LAST_COMMIT_MESSAGE" value="Wrote formula for get_streamflow&#10;Formula pulls the data for the comid.&#10;It then determines if the date is %Y-%m-%d, %Y-%m, or %Y and puts the data for the date into a dataframe.&#10;It then finds the median value of that data." />
+    <MESSAGE value="redownloaded the project to fix the big file problems" />
+    <MESSAGE value="hydroinformatics works... but on the jordan canal the NWM latched onto the wrong stream... and on no. 66 the NWM flows are SUPER low... weird" />
+    <MESSAGE value="worked on downloading nhdplus hydrography based on usgs streamgage no. it's a lot faster than my last version lol... i'll work on applying the logic here to the lhds" />
+    <MESSAGE value="revamped the rathcelon prep... will need to redo the boundary check for dems..." />
+    <MESSAGE value="removed some unnecessary print statements" />
+    <MESSAGE value="the prep and analysis work for the new gpkg rathcelon output" />
+    <MESSAGE value="added cool plot to hydraulics.py" />
+    <MESSAGE value="added water surface profile to rath analysis" />
+    <MESSAGE value="should have committed earlier... not sure why I didn't" />
+    <option name="LAST_COMMIT_MESSAGE" value="should have committed earlier... not sure why I didn't" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
       <breakpoints>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/rathcelon_prep/dem_baseflow.py</url>
-          <option name="timeStamp" value="2" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$APPLICATION_CONFIG_DIR$/scratches/Date_Scratch_FileDate_Scratch_File/Hydroviewerlatlon.py</url>
           <option name="timeStamp" value="3" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/rathcelon_prep/download_dem.py</url>
-          <line>257</line>
-          <option name="timeStamp" value="5" />
         </line-breakpoint>
       </breakpoints>
     </breakpoint-manager>
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
-    <SUITE FILE_PATH="coverage/DHS_LowHeadDam$rating_curves.coverage" NAME="rating_curves Coverage Results" MODIFIED="1742315032427" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/rathcelon_analysis" />
-    <SUITE FILE_PATH="coverage/DHS_LowHeadDam$dam_height.coverage" NAME="dam_height Coverage Results" MODIFIED="1744059962902" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/rathcelon_analysis" />
-    <SUITE FILE_PATH="coverage/DHS_LowHeadDam$dem_baseflow.coverage" NAME="dem_baseflow Coverage Results" MODIFIED="1746728307652" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/rathcelon_prep" />
-    <SUITE FILE_PATH="coverage/DHS_LowHeadDam$figures.coverage" NAME="figures Coverage Results" MODIFIED="1745419730883" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/rathcelon_analysis" />
-    <SUITE FILE_PATH="coverage/DHS_LowHeadDam$main.coverage" NAME="main Coverage Results" MODIFIED="1747079294508" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/rathcelon_prep" />
-    <SUITE FILE_PATH="coverage/DHS_LowHeadDam$download_dem.coverage" NAME="download_dem Coverage Results" MODIFIED="1743525816754" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/rathcelon_prep" />
-    <SUITE FILE_PATH="coverage/DHS_LowHeadDam$download_stream.coverage" NAME="download_stream Coverage Results" MODIFIED="1744921905925" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/rathcelon_prep" />
-    <SUITE FILE_PATH="coverage/DHS_LowHeadDam$scratch.coverage" NAME="scratch Coverage Results" MODIFIED="1747079357679" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
-    <SUITE FILE_PATH="coverage/DHS_LowHeadDam$create_json.coverage" NAME="create_json Coverage Results" MODIFIED="1745346546540" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/rathcelon_prep" />
-    <SUITE FILE_PATH="coverage/DHS_LowHeadDam$stream_slope.coverage" NAME="stream_slope Coverage Results" MODIFIED="1745430259237" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/usgs_slopes" />
+    <SUITE FILE_PATH="coverage/DHS_LowHeadDam$main.coverage" NAME="main Coverage Results" MODIFIED="1753810930848" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/usgs_slopes" />
     <SUITE FILE_PATH="coverage/DHS_LowHeadDam$cross_sections.coverage" NAME="cross_sections Coverage Results" MODIFIED="1742048900272" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/DHS_LowHeadDam$dam_height.coverage" NAME="dam_height Coverage Results" MODIFIED="1744059962902" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/rathcelon_analysis" />
+    <SUITE FILE_PATH="coverage/DHS_LowHeadDam$create_json.coverage" NAME="create_json Coverage Results" MODIFIED="1745346546540" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/rathcelon_prep" />
+    <SUITE FILE_PATH="coverage/DHS_LowHeadDam$rating_curves.coverage" NAME="rating_curves Coverage Results" MODIFIED="1742315032427" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/rathcelon_analysis" />
+    <SUITE FILE_PATH="coverage/DHS_LowHeadDam$xs_and_vdt.coverage" NAME="xs_and_vdt Coverage Results" MODIFIED="1755889602367" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/rathcelon_analysis" />
+    <SUITE FILE_PATH="coverage/DHS_LowHeadDam$download_stream.coverage" NAME="download_stream Coverage Results" MODIFIED="1753810722384" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/rathcelon_prep" />
+    <SUITE FILE_PATH="coverage/DHS_LowHeadDam$download_dem.coverage" NAME="download_dem Coverage Results" MODIFIED="1756145311851" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/rathcelon_prep" />
+    <SUITE FILE_PATH="coverage/DHS_LowHeadDam$hydroinformatics.coverage" NAME="hydroinformatics Coverage Results" MODIFIED="1752684494203" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/DHS_LowHeadDam$scratch.coverage" NAME="scratch Coverage Results" MODIFIED="1759767518485" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$APPLICATION_CONFIG_DIR$/scratches" />
+    <SUITE FILE_PATH="coverage/DHS_LowHeadDam$main__1_.coverage" NAME="main (1) Coverage Results" MODIFIED="1758731007517" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/rathcelon_prep" />
+    <SUITE FILE_PATH="coverage/DHS_LowHeadDam$stream_slope.coverage" NAME="stream_slope Coverage Results" MODIFIED="1745430259237" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/usgs_slopes" />
+    <SUITE FILE_PATH="coverage/DHS_LowHeadDam$hydraulics.coverage" NAME="hydraulics Coverage Results" MODIFIED="1755800241273" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/DHS_LowHeadDam$dem_baseflow.coverage" NAME="dem_baseflow Coverage Results" MODIFIED="1753897908984" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/rathcelon_prep" />
+    <SUITE FILE_PATH="coverage/DHS_LowHeadDam$main__2_.coverage" NAME="main (2) Coverage Results" MODIFIED="1758226031084" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/rathcelon_analysis" />
+    <SUITE FILE_PATH="coverage/DHS_LowHeadDam$figures.coverage" NAME="figures Coverage Results" MODIFIED="1756133173995" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/rathcelon_analysis" />
+    <SUITE FILE_PATH="coverage/DHS_LowHeadDam$classes.coverage" NAME="classes Coverage Results" MODIFIED="1758030504096" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/rathcelon_analysis" />
   </component>
 </project>

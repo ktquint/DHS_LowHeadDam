@@ -11,20 +11,57 @@ import os               # interacts with the operating system (e.g., file paths,
 import ast              # safely parses Python code or literals (e.g., safe string-to-list conversion)
 import math             # Standard math functions (trigonometry, logarithms, rounding, etc.)
 import pyproj           # handles CRS conversions
-import rasterio         # reads, writes, and processes raster datasets
 import numpy as np      # numerical computing with support for arrays, matrices, and math functions
 import pandas as pd     # data analysis and manipulation tool; reads in CSV, TXT, XLSX files
 import geopandas as gpd # extends pandas for working with geospatial vector data (points, lines, polygons)
 import contextily as ctx    # adds basemaps (e.g., OpenStreetMap) to geospatial plots, often used with geopandas
-import hydraulics as hyd    # hydraulic calculations and functions (my own code)
-import hydroinformatics as hi   # access streamflow information (retrospective and return period flows)
-from rasterio.plot import show  # displays raster datasets with matplotlib
+from src.core import hydraulics as hyd
 import matplotlib.pyplot as plt # creates static, animated, and interactive plots and graphs
-from rasterio.io import MemoryFile  # allows in-memory reading/writing of raster files without saving to disk
+from scipy.optimize import fsolve   # math ig ;)
 from matplotlib.ticker import FixedLocator  # custom axis tick locations in plots
-from rasterio.warp import calculate_default_transform, reproject, Resampling
-                                            # functions for reprojection and resampling of raster datasets
+# functions for reprojection and resampling of raster datasets
                                             # (coordinate transforms, resolution changes)
+from matplotlib_scalebar.scalebar import ScaleBar
+
+
+
+def add_north_arrow(ax, size=0.1, loc_x=0.1, loc_y=0.9):
+    """
+    Adds a north arrow to the map.
+
+    Parameters
+    ----------
+    ax : matplotlib axis
+        Axis to draw the arrow on.
+    size : float
+        Size of the arrow relative to figure.
+    loc_x, loc_y : float
+        Position in axis coordinates (0–1).
+    """
+    ax.annotate('N',
+                xy=(loc_x, loc_y), xytext=(loc_x, loc_y - size),
+                xycoords='axes fraction', textcoords='axes fraction',
+                ha='center', va='center',
+                fontsize=16, fontweight='bold',
+                arrowprops=dict(facecolor='black', width=5, headwidth=15))
+
+
+def rating_curve_intercept(Q, L, P, a, b, which):
+    """
+        write something here... :0
+    """
+    y_flip, y_2 = hyd.compute_flip_and_conjugate(Q, L, P)
+    y_t = a * Q**b
+    if which == 'flip':
+        return y_flip - y_t
+    elif which == 'conjugate':
+        return y_2 - y_t
+    else:
+        raise ValueError("which must be 'flip' or 'conjugate'")
+
+
+def get_prob_from_Q(Q, df):
+    return df.loc[(df['Flow (cfs)'] - Q).abs().idxmin(), 'Exceedance (%)']
 
 
 def round_sigfig(num, sig_figs):
@@ -42,7 +79,7 @@ def merge_databases(cf_database, xs_database):
 
 def fuzzy_merge(left, right, tol=2):
     """
-    Perform fuzzy merge based on Row and Col coordinates within tolerance
+        Perform fuzzy merge based on Row and Col coordinates within tolerance
     """
     result_rows = []
 
@@ -315,6 +352,7 @@ class CrossSection:
         ax.set_title(f'Submerged Hydraulic Jumps at Low-Head Dam No. {self.id}')
         ax.legend(loc='upper left')
 
+
     def plot_fatal_flows(self, ax):
         fatal_d = self.a * self.fatal_qs**self.b
         ax.scatter(self.fatal_qs * 35.315, fatal_d * 3.281,
@@ -332,22 +370,49 @@ class CrossSection:
         return fig
 
 
+    def _y_dangerous(self):
+        Q_i = 1.0
+        Q_min = fsolve(rating_curve_intercept, Q_i, args=(self.L, self.P, self.a, self.b, 'conjugate'))[0]
+        Q_max = fsolve(rating_curve_intercept, Q_i, args=(self.L, self.P, self.a, self.b, 'flip'))[0]
+        return Q_min * 35.315, Q_max * 35.315
+
+
     def plot_fdc(self, ax):
-        print(ax)
+        results_dir = os.path.dirname(self.fig_dir)
 
+        # read in the csv and plot the fdc data
+        fdc_csv = os.path.join(results_dir, 'FLOW', f'{self.id}_National Water Model_FDC.csv')
+        fdc_df = pd.read_csv(fdc_csv)
+        fdc_df['Flow (cfs)'] = fdc_df['Flow (cms)'] * 35.315
+        ax.plot(fdc_df['Exceedance (%)'], fdc_df['Flow (cfs)'], label='FDC', color='dodgerblue')
 
-    def plot_fdc_flows(self, ax):
-        print(ax)
+        # plot the vertical lines where the dangerous depths are
+        Q_conj, Q_flip = self._y_dangerous()
+        print(f"Conjugate:{Q_conj} Flip:{Q_flip}")
+        P_flip = get_prob_from_Q(Q_flip, fdc_df)
+        P_conj = get_prob_from_Q(Q_conj, fdc_df)
+
+        ax.axvline(x=P_flip, color='black', linestyle='--', label=f'Flip and Conjugate Depth Intersections')
+        ax.axvline(x=P_conj, color='black', linestyle='--')
+
+        # format the figure
+        ax.set_ylabel('Discharge (cfs)')
+        ax.set_yscale("log")
+        ax.set_xlabel('Exceedance Probability (%)')
+        ax.set_title(f'Flow-Duration Curve for Low-Head Dam No. {self.id}')
+        ax.grid(True)
+        ax.legend()
 
 
     def create_combined_fdc(self):
         fig, ax = plt.subplots()
         self.plot_fdc(ax)
-        self.plot_fdc_flows(ax)
         # the file name stands for Rating Curve No. XX at Low-Head Dam No. XX
         fig_loc = os.path.join(self.fig_dir, f"FDC_{self.index}_LHD_{self.id}.png")
         fig.savefig(fig_loc)
         return fig
+
+
 
 
 class Dam:
@@ -582,9 +647,31 @@ class Dam:
         ax.set_ylabel("Latitude")
         ax.set_title(f"Cross-Section Locations for LHD No. {self.id}")
         ax.legend(title="Cross-Section Location", title_fontsize="xx-large",
-                   loc='upper right', fontsize='x-large')
+                  loc='upper right', fontsize='x-large')
         ax.set_axis_on()
+
+        # --- Add north arrow ---
+        # add_north_arrow(ax, size=0.1, loc_x=0.1, loc_y=0.9)
+        import matplotlib.patheffects as pe
+
+        ax.annotate(
+            'N',
+            xy=(0.95, 0.15),  # arrow tip
+            xytext=(0.95, 0.05),  # arrow tail
+            xycoords='axes fraction', textcoords='axes fraction',
+            ha='center', va='center',
+            fontsize=22, fontweight='bold', color="black",
+            arrowprops=dict(facecolor='black', edgecolor='white', width=8, headwidth=25),
+            bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor="black")
+        ).set_path_effects([pe.withStroke(linewidth=3, foreground="white")])
+
+        # --- Add scale bar ---
+        scalebar = ScaleBar(1, units="m", dimension="si-length", location="lower left")
+        ax.add_artist(scalebar)
+
         fig.tight_layout()
+        plt_loc = os.path.join(self.fig_dir, f"LHD No. {self.id} Location.png")
+        fig.savefig(plt_loc)
         return fig
 
 
@@ -628,3 +715,5 @@ class Dam:
         ax.set_title(f"Water Surface Profile for LHD No. {self.id}")
         fig.tight_layout()
         return fig
+
+

@@ -138,6 +138,7 @@ def plot_shj_estimates():
         ax.set_ylabel('Depth (ft)')
         ax.grid(True, axis='y', linestyle='--', alpha=0.5)
         ax.set_title(f"Summary of Results from Cross-Section No. {i}")
+        fig.savefig(f'./Summary of Results from Cross-Section No. {i}.png')
         fig.tight_layout()
 
         fig_canvas = FigureCanvasTkAgg(fig, master=scroll_frame)
@@ -240,7 +241,7 @@ def plot_fdc(dam):
 
     # Generate and add figures
     for cross_section in dam.cross_sections[1:]:
-        rc_fig = cross_section.create_combined_fig()
+        rc_fig = cross_section.create_combined_fdc()
         fig_canvas = FigureCanvasTkAgg(rc_fig, master=scroll_frame)
         fig_canvas.draw()
         fig_canvas.get_tk_widget().pack(padx=10, pady=10, fill="both", expand=True)
@@ -303,6 +304,8 @@ def process_ARC():
                 plot_map(dam_i)
             if display_wsp.get():
                 plot_wsp(dam_i)
+            if display_fdc.get():
+                plot_fdc(dam_i)
     else:
         dam_i = Dam(int(dropdown.get()), database_csv, selected_model, estimate_dam)
         if display_cross_section.get():
@@ -313,6 +316,8 @@ def process_ARC():
             plot_map(dam_i)
         if display_wsp.get():
             plot_wsp(dam_i)
+        if display_fdc.get():
+            plot_fdc(dam_i)
 
 
 # GUI setup

@@ -1,7 +1,7 @@
 import os
 import ast
 import pandas as pd
-import hydroinformatics as hi
+from src.core import hydroinformatics as hi
 from download_dem import download_dem
 from dem_baseflow import est_dem_baseflow
 from download_flowline import download_NHDPlus, download_TDXHYDRO
@@ -134,6 +134,9 @@ class Dam:
 
     def assign_reach(self, stream_reach):
         self.dam_reach = stream_reach
+
+
+
 
 
     def fdc_to_csv(self) -> None:

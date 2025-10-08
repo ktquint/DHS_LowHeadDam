@@ -151,5 +151,5 @@ def est_dem_baseflow(stream_reach, source):
         dem_baseflow = stream_reach.get_median_flow(source)
     else:               # if there are dates, use them lol
         dem_baseflow = stream_reach.get_flow_on_date(gpstime_date, source)
-
+    print(f'the dem_baseflow is {dem_baseflow}')
     return dem_baseflow
