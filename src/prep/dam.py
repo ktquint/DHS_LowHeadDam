@@ -1,5 +1,6 @@
 import os
 import ast
+import numpy as np
 import pandas as pd
 from src.core import hydroinformatics as hi
 from download_dem import download_dem
@@ -91,14 +92,25 @@ class Dam:
 
 
     def est_dem_baseflow(self):
+        """
+            estimates the DEM baseflow if it hasn't been calculated yet...
+        """
         print("Estimating DEM baseflow...")
-        # the reason why I still have to pass hydrology to hi.est_dem_baseflow is because the stream reach object could
-        # have several hydrology options saved to it
 
-        if self.hydrology == 'National Water Model' and self.dem_baseflow_NWM is None:
-            self.dem_baseflow_NWM = est_dem_baseflow(self.dam_reach, self.hydrology)
-        elif self.hydrology == 'GEOGLOWS' and self.dem_baseflow_GEOGLOWS is None:
-            self.dem_baseflow_GEOGLOWS = est_dem_baseflow(self.dam_reach, self.hydrology)
+        if self.hydrology == 'National Water Model':
+            if pd.isna(self.dem_baseflow_NWM):
+                print(f"dem_baseflow_NWM is not set. Calling estimation function for Dam ID: {self.ID}")
+                baseflow = est_dem_baseflow(self.dam_reach, self.hydrology)
+                self.dem_baseflow_NWM = baseflow
+            else:
+                print(f"dem_baseflow_NWM already has a value: {self.dem_baseflow_NWM}")
+        elif self.hydrology == 'GEOGLOWS':
+            if pd.isna(self.dem_baseflow_GEOGLOWS):
+                print(f"dem_baseflow_GEOGLOWS is not set. Calling estimation function for Dam ID: {self.ID}")
+                baseflow = est_dem_baseflow(self.dam_reach, self.hydrology)
+                self.dem_baseflow_GEOGLOWS = baseflow
+            else:
+                print(f"dem_baseflow_GEOGLOWS already has a value: {self.dem_baseflow_GEOGLOWS}")
 
 
     def est_fatal_flows(self):
@@ -114,10 +126,12 @@ class Dam:
 
         # we're remaking fatality dates because some of the dates may fall out of the range available with NWM
         self.fatality_dates = fatality_dates
-        if self.hydrology == 'National Water Model' and self.fatality_flows_NWM is None:
-            self.fatality_flows_NWM = fatality_flows
-        elif self.hydrology == 'GEOGLOWS' and self.fatality_flows_GEOGLOWS is None:
-            self.fatality_flows_NWM = fatality_flows
+        if self.hydrology == 'National Water Model':
+            if pd.isna(self.fatality_flows_NWM):
+                self.fatality_flows_NWM = fatality_flows
+        elif self.hydrology == 'GEOGLOWS':
+            if pd.isna(self.fatality_flows_GEOGLOWS):
+                self.fatality_flows_GEOGLOWS = fatality_flows
 
 
     def assign_output(self, output_dir: str):
@@ -134,10 +148,6 @@ class Dam:
 
     def assign_reach(self, stream_reach):
         self.dam_reach = stream_reach
-
-
-
-
 
     def fdc_to_csv(self) -> None:
         fdc_results = self.dam_reach.export_fdcs()

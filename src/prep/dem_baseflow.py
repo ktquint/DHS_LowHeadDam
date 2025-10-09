@@ -8,7 +8,6 @@ from pyproj import Transformer
 from datetime import datetime, timedelta
 
 # global variables
-gen_api_key = 'AIzaSyC4BXXMQ9KIodnLnThFi5Iv4y1fDR4U1II'
 base_url = "https://tnmaccess.nationalmap.gov/api/v1/products"
 
 

@@ -1,7 +1,15 @@
+import io
+import os
 import requests
 import pandas as pd
-import io
-nwm_api_key = "AIzaSyC4BXXMQ9KIodnLnThFi5Iv4y1fDR4U1II"
+from pathlib import Path
+from dotenv import load_dotenv
+
+
+env_path = Path(__file__).parent.parent / 'config' / '.env'
+load_dotenv(dotenv_path=env_path)
+
+nwm_api_key = os.getenv("API_KEY")
 
 def get_usgs_latlon(site_no):
     site_no = str(site_no).zfill(8)  # pad with leading zeros
