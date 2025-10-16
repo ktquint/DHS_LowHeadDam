@@ -208,6 +208,21 @@ class StreamReach:
             return float(match.iloc[0]['flow_cms'])
         return None
 
+    def get_median_flow(self, source: str) -> float:
+        """
+        Calculates the median flow for the entire period of record for a given source.
+
+        Args:
+            source (str): The data source ('GEOGLOWS', 'National Water Model', or 'USGS').
+
+        Returns:
+            float: The median streamflow in m^3/s, or np.nan if data is unavailable.
+        """
+        df = self._get_source_df(source)
+        if df is not None and not df.empty:
+            return float(df['flow_cms'].median())
+        return np.nan
+
     def get_median_flow_in_range(self, start_date, end_date, source):
         """More efficient method to get median flow in a date range."""
         df = self._get_source_df(source)

@@ -147,8 +147,10 @@ def est_dem_baseflow(stream_reach, source):
 
     # use the date range to estimate the baseflow
     if not gpstime_date:   # if no dates given, just use the median flow
+        print("No available LiDAR data, so we'll just assume it was an average day...")
         dem_baseflow = stream_reach.get_median_flow(source)
     else:               # if there are dates, use them lol
+        print("We got some Lidar data, now we gotta estimate the flow that day...")
         dem_baseflow = stream_reach.get_flow_on_date(gpstime_date, source)
-    print(f'the dem_baseflow is {dem_baseflow}')
+    print(f'The baseflow estimate is {dem_baseflow} cms')
     return dem_baseflow

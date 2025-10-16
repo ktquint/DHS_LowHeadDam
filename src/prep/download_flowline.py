@@ -147,32 +147,41 @@ def download_NHDPlus(latitude: float, longitude: float, flowline_dir: str) -> st
             os.remove(local_zip_path)
 
 
-        # assuming layers are always named 'NHDFlowline' and 'NHDPlusFlowlineVAA' instead of lowercase
+        # 1. read data into memory
         flowlines_gdf = gpd.read_file(filename=gpkg_loc, layer='NHDFlowline', engine='fiona')
         metadata_gdf = gpd.read_file(filename=gpkg_loc, layer='NHDPlusFlowlineVAA', engine='fiona')
 
-        # normalize column names to lowercase
+        # 2. merge data while in memory
         flowlines_gdf.columns = flowlines_gdf.columns.str.lower()
         metadata_gdf.columns = metadata_gdf.columns.str.lower()
-
-        # merge gdf on uniform fields
         merged_gdf = flowlines_gdf.merge(metadata_gdf, on=['nhdplusid', 'reachcode', 'vpuid'])
 
-        # save the gdf to a new file
-        new_gpkg_loc = gpkg_loc.replace('.gpkg', '_VAA.gpkg')
-        merged_gdf.to_file(filename=new_gpkg_loc, layer='NHDFlowline', driver='GPKG')
+        # 3. re-index while in memory
+        reindexed_cols = {'hydroseq', 'uphydroseq', 'dnhydroseq'}
+        if reindexed_cols.issubset(merged_gdf.columns) and not merged_gdf.empty:
+            offset = merged_gdf['hydroseq'].min() - 1
+            for col in reindexed_cols:
+                merged_gdf[col] = merged_gdf[col] - offset
+            print(f"    – Re-indexed hydroseq fields in memory. Offset applied: {offset}")
 
-        # delete the old files
-        xml_loc = gpkg_loc.replace('.gpkg', '.xml')
-        jpg_loc = gpkg_loc.replace('.gpkg', '.jpg')
-        old_locs = [gpkg_loc, xml_loc, jpg_loc]
-        for loc in old_locs:
-            os.remove(loc)
+        # 4. save the final, processed gdf
+        #   VAA for value-added attributes and RI for re-indexed
+        final_gpkg_loc = gpkg_loc.replace('.gpkg', '_VAA_RI.gpkg')
+        merged_gdf.to_file(filename=final_gpkg_loc, layer='NHDFlowline', driver='GPKG')
+        print(f"    – Saved final re-indexed file as: {os.path.basename(final_gpkg_loc)}")
 
-        return new_gpkg_loc
+        # 5. clean up by deleting original files
+        files_to_delete =[gpkg_loc, gpkg_loc.replace('.gpkg', '.xml'),
+                          gpkg_loc.replace('.gpkg', '.jpg')]
+        for loc in files_to_delete:
+            if os.path.exists(loc):
+                os.remove(loc)
+
+        return final_gpkg_loc
 
     except requests.RequestException as e:
-        print(e)
+        print(f"An error occurred during the download: {e}")
+        return None
 
 
 def download_TDXHYDRO(latitude: float, longitude: float, flowline_dir: str, TDX_full: str) -> str:
