@@ -247,27 +247,27 @@ this is the real deal... at least a real test case
 """
 
 
-# this folder has the results from some example runs
-all_results = "E:/LHD_1-m_NWM/LHD_Results"
-# these are the subdirectories for each rathcelon run
-rath_runs = [os.path.join(all_results, d) for d in os.listdir(all_results) if os.path.isdir(os.path.join(all_results, d))]
-
-for rath_run in rath_runs:
-    # the lhd_id is the name of each directory
-    if run_successful(rath_run):
-        lhd_id = os.path.basename(rath_run)
-        # read in the cf and xs file...
-        cf_gpkg = os.path.join(rath_run, 'VDT', f'{lhd_id}_Local_CurveFile.gpkg')
-        xs_gpkg = os.path.join(rath_run, 'XS', f'{lhd_id}_Local_XS_Lines.gpkg')
-        vdt_gpkg = os.path.join(rath_run, 'VDT', f'{lhd_id}_Local_VDT_Database.gpkg')
-
-        cf_csv = os.path.join(rath_run, 'VDT', f'{lhd_id}_CurveFile.csv')
-        xs_txt = os.path.join(rath_run, 'XS', f'{lhd_id}_XS_Out.txt')
-
-        merged_gdf = merge_arc_results(cf_gpkg, vdt_gpkg, xs_gpkg)
-        database_df = merge_databases(cf_csv, xs_txt)
-
-        # plot rating curves and cross-sections
-        # plot_rating_curves(merged_gdf, rath_run)
-        # plot_cross_sections(merged_gdf, rath_run)
-        plot_water_profiles(merged_gdf, database_df)
+# # this folder has the results from some example runs
+# all_results = "E:/LHD_1-m_NWM/LHD_Results"
+# # these are the subdirectories for each rathcelon run
+# rath_runs = [os.path.join(all_results, d) for d in os.listdir(all_results) if os.path.isdir(os.path.join(all_results, d))]
+#
+# for rath_run in rath_runs:
+#     # the lhd_id is the name of each directory
+#     if run_successful(rath_run):
+#         lhd_id = os.path.basename(rath_run)
+#         # read in the cf and xs file...
+#         cf_gpkg = os.path.join(rath_run, 'VDT', f'{lhd_id}_Local_CurveFile.gpkg')
+#         xs_gpkg = os.path.join(rath_run, 'XS', f'{lhd_id}_Local_XS_Lines.gpkg')
+#         vdt_gpkg = os.path.join(rath_run, 'VDT', f'{lhd_id}_Local_VDT_Database.gpkg')
+#
+#         cf_csv = os.path.join(rath_run, 'VDT', f'{lhd_id}_CurveFile.csv')
+#         xs_txt = os.path.join(rath_run, 'XS', f'{lhd_id}_XS_Out.txt')
+#
+#         merged_gdf = merge_arc_results(cf_gpkg, vdt_gpkg, xs_gpkg)
+#         database_df = merge_databases(cf_csv, xs_txt)
+#
+#         # plot rating curves and cross-sections
+#         # plot_rating_curves(merged_gdf, rath_run)
+#         # plot_cross_sections(merged_gdf, rath_run)
+#         plot_water_profiles(merged_gdf, database_df)
