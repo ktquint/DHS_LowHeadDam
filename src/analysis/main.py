@@ -65,22 +65,49 @@ def plot_shj_estimates():
     scrollbar.pack(side="right", fill="y")
 
     for i in range(1, 5):
-        y_t_strs = lhd_df[f'y_t_{i}'].to_list()
-        y_t_list = [num for item in y_t_strs for num in ast.literal_eval(item)]
+        # Define the columns for the current iteration
+        cols_to_check = [f'y_t_{i}', f'y_flip_{i}', f'y_2_{i}', f's_{i}']
 
-        y_flip_strs = lhd_df[f'y_flip_{i}'].to_list()
-        y_flip_list = [num for item in y_flip_strs for num in ast.literal_eval(item)]
+        # Drop rows where any of these essential columns are NaN or empty
+        filtered_df = lhd_df.dropna(subset=cols_to_check).copy()
 
-        y_2_strs = lhd_df[f'y_2_{i}'].to_list()
-        y_2_list = [num for item in y_2_strs for num in ast.literal_eval(item)]
+        # If after filtering, the dataframe is empty, skip to the next iteration
+        if filtered_df.empty:
+            print(f"No data available for cross-section {i}. Skipping plot.")
+            continue
 
-        slopes = lhd_df[f's_{i}'].to_list()
-        dam_ids = lhd_df['ID'].tolist()
+        # Helper function to safely evaluate string lists
+        def safe_literal_eval(item):
+            try:
+                # Ensure item is a string and looks like a list before evaluating
+                if pd.notna(item) and isinstance(item, str) and item.strip().startswith('['):
+                    return ast.literal_eval(item)
+            except (ValueError, SyntaxError):
+                # Return an empty list if evaluation fails
+                return []
+            return []
 
-        nested_list = [ast.literal_eval(item) for item in y_t_strs]
+        # Process the filtered data
+        y_t_strs = filtered_df[f'y_t_{i}'].to_list()
+        y_flip_strs = filtered_df[f'y_flip_{i}'].to_list()
+        y_2_strs = filtered_df[f'y_2_{i}'].to_list()
+        slopes = filtered_df[f's_{i}'].to_list()
+        dam_ids = filtered_df['ID'].tolist()
+
+        y_t_list = [num for item in y_t_strs for num in safe_literal_eval(item)]
+        y_flip_list = [num for item in y_flip_strs for num in safe_literal_eval(item)]
+        y_2_list = [num for item in y_2_strs for num in safe_literal_eval(item)]
+
+        nested_list = [safe_literal_eval(item) for item in y_t_strs]
+
+        # Check if nested_list is empty after processing
+        if not any(nested_list):
+            print(f"All rows for cross-section {i} contained empty lists. Skipping plot.")
+            continue
+
         expanded_slopes = [val for val, group in zip(slopes, nested_list) for _ in range(len(group))]
         expanded_ids = [val for val, group in zip(dam_ids, nested_list) for _ in range(len(group))]
-
+        # --- MODIFICATION END ---
 
         df = pd.DataFrame({
             'slope': expanded_slopes,
@@ -89,6 +116,10 @@ def plot_shj_estimates():
             'y_2': y_2_list,
             'dam_id': expanded_ids
         })
+
+        if df.empty:
+            print(f"DataFrame is empty for cross-section {i} after processing. Skipping plot.")
+            continue
 
         df = df.sort_values(['dam_id', 'slope']).reset_index(drop=True)
         x_vals = np.arange(len(df))
@@ -129,7 +160,7 @@ def plot_shj_estimates():
                 shade = not shade
 
         # Handle the final dam
-        if shade:
+        if shade and len(df) > 0:
             ax.axvspan(start_idx - 0.5, len(df) - 0.5, color='gray', alpha=0.1)
 
         ax.set_xticks(x_vals)
@@ -138,7 +169,7 @@ def plot_shj_estimates():
         ax.set_ylabel('Depth (ft)')
         ax.grid(True, axis='y', linestyle='--', alpha=0.5)
         ax.set_title(f"Summary of Results from Cross-Section No. {i}")
-        fig.savefig(f'./Summary of Results from Cross-Section No. {i}.png')
+        # fig.savefig(f'./Summary of Results from Cross-Section No. {i}.png')
         fig.tight_layout()
 
         fig_canvas = FigureCanvasTkAgg(fig, master=scroll_frame)
@@ -273,7 +304,6 @@ def successful_runs(results_dir):
             return False
     return successes
 
-# Your custom function using the folder path from the entry
 def process_ARC():
     # project_dir holds all the project files
     database_csv = database_entry.get()

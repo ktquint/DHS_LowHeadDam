@@ -313,7 +313,6 @@ class CrossSection:
         plt.grid(True)
         plt.show()
 
-
     def plot_flip_sequent(self, ax):
         # set the range of Q's we want to plot
         Qs = np.linspace(0.01, self.max_Q, 100)
@@ -331,12 +330,12 @@ class CrossSection:
         Y_Conjugates = np.array(Y_Conjugates)
 
         # american units *eagle screech*... if you don't like it then just get rid of the unit conversions
-        ax.plot(Qs*35.315, Y_Flips*3.281,
-                 label="Flip Depth", color='gray', linestyle='--')
-        ax.plot(Qs*35.315, Y_Ts*3.281,
-                 label="Tailwater Depth", color='dodgerblue', linestyle='-')
-        ax.plot(Qs*35.315, Y_Conjugates*3.281,
-                 label="Sequent Depth", color='gray', linestyle='-')
+        ax.plot(Qs * 35.315, Y_Flips * 3.281,
+                label="Flip Depth", color='gray', linestyle='--')
+        ax.plot(Qs * 35.315, Y_Ts * 3.281,
+                label="Tailwater Depth", color='dodgerblue', linestyle='-')
+        ax.plot(Qs * 35.315, Y_Conjugates * 3.281,
+                label="Sequent Depth", color='gray', linestyle='-')
 
         # make the plot look more presentable
         ax.grid(True)
@@ -350,20 +349,23 @@ class CrossSection:
         # plt.ylabel('Depth (m)')
 
         ax.set_title(f'Submerged Hydraulic Jumps at Low-Head Dam No. {self.id}')
-        ax.legend(loc='upper left')
-
+        # ax.legend(loc='upper left') # <- REMOVE THIS LINE
 
     def plot_fatal_flows(self, ax):
-        fatal_d = self.a * self.fatal_qs**self.b
+        fatal_d = self.a * self.fatal_qs ** self.b
         ax.scatter(self.fatal_qs * 35.315, fatal_d * 3.281,
-                 label="Recorded Fatality", marker='o',
-                 facecolors='none', edgecolors='black')
+                   label="Recorded Fatality", marker='o',
+                   facecolors='none', edgecolors='black')
 
     # noinspection PyTypeChecker
     def create_combined_fig(self):
         fig, ax = plt.subplots()
         self.plot_flip_sequent(ax)
         self.plot_fatal_flows(ax)
+
+        # ADD THE LEGEND HERE, AFTER ALL PLOTTING IS DONE
+        ax.legend(loc='upper left')
+
         # the file name stands for Rating Curve No. XX at Low-Head Dam No. XX
         fig_loc = os.path.join(self.fig_dir, f"RC_{self.index}_LHD_{self.id}.png")
         fig.savefig(fig_loc)
