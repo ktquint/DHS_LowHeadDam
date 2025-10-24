@@ -5,9 +5,6 @@ import requests
 import numpy as np
 import pandas as pd
 import geopandas as gpd
-from pathlib import Path
-from dotenv import load_dotenv
-from datetime import date
 from math import cos, radians
 import matplotlib.pyplot as plt
 from typing import List, Optional
@@ -197,16 +194,38 @@ class StreamReach:
         return df
 
     def get_flow_on_date(self, target_date, source):
-        """More efficient method to get flow on a specific date."""
+        """More efficient method to get flow on a specific date, returning reasons for failure."""
         df = self._get_source_df(source)
-        if df is None: return None
+        if df is None or df.empty:
+            return f"No data available for source: {source}"  # Reason 1: No data loaded for the source
 
-        target_date = pd.to_datetime(target_date).date()
-        match = df[df.index.date == target_date]
+        # Convert target_date to datetime.date for comparison
+        try:
+            target_dt = pd.to_datetime(target_date).date()
+        except ValueError:
+            return "Invalid target date format"  # Reason 2: Date couldn't be parsed
+
+        # Check if the date is within the range of the DataFrame index
+        min_date = df.index.min().date()
+        max_date = df.index.max().date()
+
+        if not (min_date <= target_dt <= max_date):
+            return f"Date out of range ({min_date} to {max_date})"  # Reason 3: Date outside available data range
+
+        # Look for the specific date
+        match = df[df.index.date == target_dt]
 
         if not match.empty:
-            return float(match.iloc[0]['flow_cms'])
-        return None
+            # Check if the flow value itself is valid (e.g., not NaN)
+            flow_value = match.iloc[0]['flow_cms']
+            if pd.notna(flow_value):
+                return float(flow_value)  # Success! Return the flow
+            else:
+                return "Data exists, but flow value is missing (NaN)"  # Reason 4: Date found, but value is NaN
+        else:
+            # This case might be less common if the date range check passes,
+            # but could happen if there are gaps in daily data within the range.
+            return "No data found for this specific date within the range"  # Reason 5: Date in range, but no specific row
 
     def get_median_flow(self, source: str) -> float:
         """
@@ -250,7 +269,6 @@ class StreamReach:
         for source in self.data_sources:
             df = self._get_source_df(source)
             if df is not None and not df.empty:
-                comid = ""
                 if source == "GEOGLOWS":
                     comid = self._linkno
                 elif source == "USGS":
@@ -273,7 +291,6 @@ class StreamReach:
         for source in self.data_sources:
             df = self._get_source_df(source)
             if df is not None and not df.empty:
-                comid = ""
                 if source == "GEOGLOWS":
                     comid = self._linkno
                 elif source == "USGS":

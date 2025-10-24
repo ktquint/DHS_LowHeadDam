@@ -85,23 +85,40 @@ def find_water_gpstime(lat, lon):
 
             print(f"Processing {os.path.basename(las_path)}...")
             las = laspy.read(las_path)
-
-            x = las.x
-            y = las.y
-
-            # Get CRS and project the lat/lon
-            crs = las.header.parse_crs()
-            if crs is None:
+            crs_obj = las.header.parse_crs()
+            if crs_obj is None:
                 print("CRS not found in LAS header.")
-                return None
+                # Option: Assume a default if you know it, e.g.,
+                # known_epsg = 26912 # Replace with the correct code
+                # print(f"Assuming known EPSG:{known_epsg}")
+                # transformer = Transformer.from_crs("EPSG:4326", f"EPSG:{known_epsg}", always_xy=True)
+                return None  # Or handle assumption
 
-            crs_auth = crs.sub_crs_list[0].to_authority()
-            if crs_auth is None:
-                print("CRS authority code missing.")
-                return None
+            # Try getting EPSG code first
+            crs_auth = crs_obj.sub_crs_list[0].to_authority()
+            if crs_auth and crs_auth[0] == 'EPSG':
+                epsg_code = crs_auth[1]
+                print(f"Found EPSG code: {epsg_code}")
+                transformer = Transformer.from_crs("EPSG:4326", f"EPSG:{epsg_code}", always_xy=True)
+            else:
+                # If no EPSG, try using the CRS object directly (pyproj might handle it)
+                print("No standard EPSG code found. Trying to create Transformer from CRS object.")
+                try:
+                    # Pass the CRS object itself instead of an EPSG string
+                    transformer = Transformer.from_crs("EPSG:4326", crs_obj, always_xy=True)
+                    print("Successfully created transformer from CRS object.")
+                except Exception as e:
+                    print(f"Could not create transformer from CRS object: {e}")
+                    # Option: Assume a default if you know it
+                    # known_epsg = 26912 # Replace with the correct code
+                    # print(f"Assuming known EPSG:{known_epsg}")
+                    # try:
+                    #      transformer = Transformer.from_crs("EPSG:4326", f"EPSG:{known_epsg}", always_xy=True)
+                    # except Exception as e2:
+                    #      print(f"Failed even with assumed EPSG: {e2}")
+                    #      return None
+                    return None  # Give up if transformation isn't possible
 
-            epsg_code = crs_auth[1]
-            transformer = Transformer.from_crs("EPSG:4326", f"EPSG:{epsg_code}", always_xy=True)
             easting, northing = transformer.transform(lon, lat)
 
             # Filter for water points (classification 9)
@@ -109,6 +126,9 @@ def find_water_gpstime(lat, lon):
             if not np.any(water_mask):
                 print("No water-classified points found.")
                 return None
+
+            x = las.x
+            y = las.y
 
             water_points = np.vstack((x[water_mask], y[water_mask])).T
             tree = cKDTree(water_points)

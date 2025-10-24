@@ -33,7 +33,7 @@ def haversine(lat1, lon1, lat2, lon2):
     return R * c
 
 
-def find_huc(latitude: float, longitude: float) -> str:
+def find_huc(latitude: float, longitude: float) -> str or None:
     # we'll use a bounding box to find a streamgage near our dam
     bbox = make_bbox(latitude, longitude, 0.1)
     # Request sites with siteType=ST (surface water sites)
@@ -57,14 +57,23 @@ def find_huc(latitude: float, longitude: float) -> str:
     # Filter to short site numbers (likely surface water gages)
     stream_df = response_df[response_df['site_no'].astype(str).str.len() <= 8].copy()
 
-    # Now find the closest among these
-    stream_df['distance_km'] = stream_df.apply(lambda row:haversine(latitude, longitude,
-                                                                    row['dec_lat_va'], row['dec_long_va']),
+    # --- ADD THIS CHECK ---
+    if stream_df.empty:
+        # Handle the case where no suitable stream gages were found
+        print(f"Warning: No USGS stream gages found near {latitude}, {longitude} after filtering.")
+        # Decide what to return. Maybe None, or raise a specific error?
+        # Returning None might be better handled downstream.
+        return None
+    # --- END CHECK ---
+
+    # Now find the closest among these (this code only runs if stream_df wasn't empty)
+    stream_df['distance_km'] = stream_df.apply(lambda row: haversine(latitude, longitude,
+                                                                     row['dec_lat_va'], row['dec_long_va']),
                                                axis=1)
 
     nearest_site = stream_df.loc[stream_df['distance_km'].idxmin()]
 
-    return nearest_site['huc_cd'][:4]
+    return nearest_site['huc_cd'][:4]  # Only return huc if a site was found
 
 
 def download_NHDPlus(latitude: float, longitude: float, flowline_dir: str) -> str|None:
@@ -75,6 +84,9 @@ def download_NHDPlus(latitude: float, longitude: float, flowline_dir: str) -> st
         saves new Flowline layer as a .gpkg and deletes the old one
     """
     hu4 = find_huc(latitude, longitude)
+    if hu4 is None:
+        print(f"Could not determine HUC4 for coordinates {latitude}, {longitude}. Skipping NHDPlus download.")
+        return None  # Indicate failure
 
     # before we go any further, let's make sure we haven't already downloaded this huc...
     already_downloaded = [f for f in os.listdir(flowline_dir) if hu4 in f]
@@ -84,6 +96,7 @@ def download_NHDPlus(latitude: float, longitude: float, flowline_dir: str) -> st
         return os.path.join(flowline_dir, already_downloaded[0])
 
     bbox = make_bbox(latitude, longitude, 0.01)
+    print(bbox)
 
     product = "National Hydrography Dataset Plus High Resolution (NHDPlus HR)"
     base_url = "https://tnmaccess.nationalmap.gov/api/v1/products"
@@ -206,7 +219,7 @@ def download_TDXHYDRO(latitude: float, longitude: float, flowline_dir: str, TDX_
     vpu_code = nearest["VPUCode"]
 
     gpkg_loc = os.path.join(flowline_dir, f"streams_{vpu_code}.gpkg")
-    gpkg_name = gpkg_loc.split("/")[-1]
+    gpkg_name = gpkg_loc.split("\\")[-1]
     vpu_id = gpkg_name[-8:-5]
     gpkg_url = f"{base_url}vpu={vpu_id}/{gpkg_name}"
 

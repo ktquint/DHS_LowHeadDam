@@ -1,6 +1,5 @@
 import os
 import ast
-import numpy as np
 import pandas as pd
 from src.core import hydroinformatics as hi
 from download_dem import download_dem
@@ -69,16 +68,45 @@ class Dam:
         elif self.hydrography == 'GEOGLOWS':
             self.flowline_TDX = download_TDXHYDRO(self.latitude, self.longitude, flowline_dir, TDX_full)
 
-
     def assign_dem(self, dem_dir, resolution):
-        dem_subdir, self.final_titles, self.final_resolution = download_dem(self.ID, self.latitude, self.longitude, self.weir_length, dem_dir, resolution)
+        # Call download_dem, which now returns resolution_meters
+        dem_subdir, self.final_titles, resolution_meters = download_dem(
+            self.ID, self.latitude, self.longitude, self.weir_length, dem_dir, resolution
+        )
 
-        if self.final_resolution == "Digital Elevation Model (DEM) 1 meter":
-            self.dem_1m = dem_subdir
-        elif self.final_resolution == "National Elevation Dataset (NED) 1/9 arc-second":
-            self.dem_3m = dem_subdir
+        # Clear existing paths first to avoid incorrect assignments if resolution changes
+        self.dem_1m = None
+        self.dem_3m = None
+        self.dem_10m = None
+        self.final_resolution = None  # Reset this too
+
+        if dem_subdir and resolution_meters is not None:
+            # Assign path based on the returned resolution_meters
+            # Add some tolerance for floating point comparisons
+            if resolution_meters <= 1.5:
+                self.dem_1m = dem_subdir
+                self.final_resolution = "Digital Elevation Model (DEM) 1 meter"  # Set descriptive name
+            elif resolution_meters <= 5.0:  # e.g., 1/9 arc-second ~ 3m
+                self.dem_3m = dem_subdir
+                self.final_resolution = "National Elevation Dataset (NED) 1/9 arc-second"
+            else:  # Assume >= 10m for 1/3 arc-second or others
+                self.dem_10m = dem_subdir
+                self.final_resolution = "National Elevation Dataset (NED) 1/3 arc-second Current"
+            print(
+                f"Assigned DEM path '{dem_subdir}' to appropriate resolution category based on ~{resolution_meters:.2f}m")
+        elif dem_subdir:
+            # Handle case where resolution couldn't be determined but path exists
+            print(
+                f"Warning: DEM path '{dem_subdir}' exists, but resolution could not be determined. Assigning based on preferred input '{resolution}'.")
+            # Fallback to assigning based on the initially requested resolution string
+            if "1 meter" in resolution:
+                self.dem_1m = dem_subdir
+            elif "1/9 arc-second" in resolution:
+                self.dem_3m = dem_subdir
+            else:
+                self.dem_10m = dem_subdir
         else:
-            self.dem_10m = dem_subdir
+            print(f"DEM assignment failed for Dam {self.ID}.")
 
 
     def create_reach(self, nwm_ds=None):
@@ -112,26 +140,41 @@ class Dam:
             else:
                 print(f"dem_baseflow_GEOGLOWS already has a value: {self.dem_baseflow_GEOGLOWS}")
 
-
     def est_fatal_flows(self):
         print("Estimating fatal flows...")
-        fatality_dates = []
-        fatality_flows = []
+        fatality_dates_kept = []  # Renamed to avoid confusion
+        fatality_flows_kept = []  # Renamed
+        skipped_dates_reasons = {}  # Dictionary to store skipped dates and reasons
 
-        for fatality_date in self.fatality_dates:
-            fatality_flow = self.dam_reach.get_flow_on_date(fatality_date, self.hydrology)
-            if fatality_flow is not None:
-                fatality_dates.append(fatality_date)
-                fatality_flows.append(fatality_flow)
+        for fatality_date in self.fatality_dates:  # Loop through original dates
+            fatality_flow_result = self.dam_reach.get_flow_on_date(fatality_date, self.hydrology)
 
-        # we're remaking fatality dates because some of the dates may fall out of the range available with NWM
-        self.fatality_dates = fatality_dates
+            if isinstance(fatality_flow_result, float):  # Check if it's a valid number
+                fatality_dates_kept.append(fatality_date)
+                fatality_flows_kept.append(fatality_flow_result)
+            else:
+                # Store the reason why the date was skipped
+                skipped_dates_reasons[fatality_date] = fatality_flow_result
+                print(
+                    f"Skipping date {fatality_date} for dam {self.ID}. Reason: {fatality_flow_result}")  # Optional: print why it was skipped
+
+        # Optional: Print a summary of skipped dates
+        if skipped_dates_reasons:
+            print(f"\nSummary of skipped dates for Dam {self.ID}:")
+            for date, reason in skipped_dates_reasons.items():
+                print(f"  - {date}: {reason}")
+            print("-" * 20)
+
+        # Update attributes with the lists of dates/flows that were successfully retrieved
+        self.fatality_dates = fatality_dates_kept  # Overwrite with only the dates that had flow data
         if self.hydrology == 'National Water Model':
-            if pd.isna(self.fatality_flows_NWM):
-                self.fatality_flows_NWM = fatality_flows
+            # Only update if the original was NaN, otherwise keep existing data
+            if pd.isna(self.fatality_flows_NWM) or not self.fatality_flows_NWM:  # Check if None or empty list
+                self.fatality_flows_NWM = fatality_flows_kept
         elif self.hydrology == 'GEOGLOWS':
-            if pd.isna(self.fatality_flows_GEOGLOWS):
-                self.fatality_flows_GEOGLOWS = fatality_flows
+            # Only update if the original was NaN, otherwise keep existing data
+            if pd.isna(self.fatality_flows_GEOGLOWS) or not self.fatality_flows_GEOGLOWS:  # Check if None or empty list
+                self.fatality_flows_GEOGLOWS = fatality_flows_kept
 
 
     def assign_output(self, output_dir: str):
