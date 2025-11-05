@@ -15,7 +15,7 @@ import numpy as np      # numerical computing with support for arrays, matrices,
 import pandas as pd     # data analysis and manipulation tool; reads in CSV, TXT, XLSX files
 import geopandas as gpd # extends pandas for working with geospatial vector data (points, lines, polygons)
 import contextily as ctx    # adds basemaps (e.g., OpenStreetMap) to geospatial plots, often used with geopandas
-from src.core import hydraulics as hyd
+from core import hydraulics as hyd
 import matplotlib.pyplot as plt # creates static, animated, and interactive plots and graphs
 from scipy.optimize import fsolve   # math ig ;)
 from matplotlib.ticker import FixedLocator  # custom axis tick locations in plots

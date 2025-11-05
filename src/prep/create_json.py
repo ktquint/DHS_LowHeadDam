@@ -31,29 +31,25 @@ def rathcelon_input(lhd_csv, output_loc, hydrography, hydrology):
         else:
             known_baseflow = row['dem_baseflow_NWM']
 
-
-        dam_dict = {"name" : name,
-                    "dam_csv" : dam_csv,
-                    "dam_id_field" : dam_id_field,
-                    "dam_id" : dam_id,
-                    "flowline" : flowline,
-                    "dem_dir" : dem_dir,
+        dam_dict = {"name": name,
+                    "dam_csv": dam_csv,
+                    "dam_id_field": dam_id_field,
+                    "dam_id": dam_id,
+                    "flowline": flowline,
+                    "dem_dir": dem_dir,
                     "bathy_use_banks": False,
-                    "output_dir" : output_dir,
-                    "process_stream_network" : True,
-                    "find_banks_based_on_landcover" : False,
-                    "create_reach_average_curve_file" : False,
+                    "output_dir": output_dir,
+                    "process_stream_network": True,
+                    "find_banks_based_on_landcover": False,
+                    "create_reach_average_curve_file": False,
                     "known_baseflow": known_baseflow}
         dams.append(dam_dict)
-    input_data = {"dams" : dams}
+
+    input_data = {"dams": dams}
     with open(output_loc, 'w') as json_file:
         # noinspection PyTypeChecker
         json.dump(input_data, json_file, indent=4)
+
     # this will tell us where we saved the input file
 
-"""
-test case
-"""
-# test_csv = "C:/Users/adele/Downloads/Low head Dam Info - Copy for python(Slopes).csv"
-# output_fold = "C:/Users/adele/Downloads"
-# rathcelon_input(test_csv, output_fold)
+    return dams

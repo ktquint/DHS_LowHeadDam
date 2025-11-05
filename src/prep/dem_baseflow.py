@@ -2,6 +2,7 @@ import os
 import requests
 import tempfile
 import laspy
+import laspy.errors
 import numpy as np
 from scipy.spatial import cKDTree
 from pyproj import Transformer
@@ -32,8 +33,9 @@ def find_water_gpstime(lat, lon):
 
     params = {"bbox": f"{bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]}",
               "datasets": "Lidar Point Cloud (LPC)",
-              "max": 1, "outputFormat": "JSON" }
+              "max": 1, "outputFormat": "JSON"}
 
+    las_path = "Unknown"  # Define las_path here for error logging
     try:
         response = requests.get(base_url, params=params)
         response.raise_for_status()
@@ -144,8 +146,22 @@ def find_water_gpstime(lat, lon):
 
             return full_gps_time
 
-    except Exception as e:
+    except laspy.errors.MissingLazBackend as e:
+        print("=" * 50)
+        print("ERROR: FAILED TO READ LIDAR FILE")
+        print(f"File: {las_path}")
         print(f"Error: {e}")
+        print("\nThis means your environment is missing a library to read compressed")
+        print("LiDAR files (.laz). To fix this, please activate your conda")
+        print("environment (e.g., 'conda activate rathcelon_py310') and run:")
+        print("\n    pip install lazrs\n")
+        print("Or, if you prefer conda:")
+        print("\n    conda install -c conda-forge lazrs\n")
+        print("=" * 50)
+        return None  # Continue to fallback (median flow)
+    except Exception as e:
+        print(f"An unexpected error occurred in find_water_gpstime: {e}")
+        print(f"File: {las_path if 'las_path' in locals() else 'Unknown'}")
         return None
 
 
@@ -166,10 +182,10 @@ def est_dem_baseflow(stream_reach, source):
         gpstime_date = gpstime_to_date(lidar_gpstime)
 
     # use the date range to estimate the baseflow
-    if not gpstime_date:   # if no dates given, just use the median flow
+    if not gpstime_date:  # if no dates given, just use the median flow
         print("No available LiDAR data, so we'll just assume it was an average day...")
         dem_baseflow = stream_reach.get_median_flow(source)
-    else:               # if there are dates, use them lol
+    else:  # if there are dates, use them lol
         print("We got some Lidar data, now we gotta estimate the flow that day...")
         dem_baseflow = stream_reach.get_flow_on_date(gpstime_date, source)
     print(f'The baseflow estimate is {dem_baseflow} cms')

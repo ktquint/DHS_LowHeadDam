@@ -256,9 +256,6 @@ class StreamReach:
             return self.geoglows_df
         elif source == "National Water Model":
             return self.nwm_df
-        # Add USGS case here...
-        # elif source == "USGS":
-        #     return self.usgs_df
         else:
             raise ValueError(f"Unknown source: {source}")
 

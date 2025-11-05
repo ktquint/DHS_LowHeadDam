@@ -6,7 +6,7 @@ import requests
 import pandas as pd
 import geopandas as gpd
 from shapely.geometry import box, Point
-from download_dem import sanitize_filename
+from .download_dem import sanitize_filename
 from math import radians, sin, cos, sqrt, atan2
 
 
