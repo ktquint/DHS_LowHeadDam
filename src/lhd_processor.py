@@ -1,5 +1,6 @@
 import os
 import ast
+import json
 import threading
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
@@ -42,7 +43,6 @@ except ImportError:
 # ===================================================================
 #
 # TAB 1: PREPARATION & PROCESSING FUNCTIONS
-# (Based on src/prep/main.py)
 #
 # ===================================================================
 
@@ -78,8 +78,12 @@ def select_prep_project_dir():
         prep_results_entry.delete(0, tk.END)
         prep_results_entry.insert(0, results_path)
 
+        # Auto-populate both the creation path and the run path for the JSON
+        json_path = os.path.join(project_path, "rathcelon_input.json")
         prep_json_entry.delete(0, tk.END)
-        prep_json_entry.insert(0, os.path.join(project_path, "rathcelon_input.json"))
+        prep_json_entry.insert(0, json_path)
+        rathcelon_json_entry.delete(0, tk.END)  # Also populate the new entry field
+        rathcelon_json_entry.insert(0, json_path)
 
         prep_csv_entry.delete(0, tk.END)
         prep_csv_entry.insert(0, os.path.splitext(database_path)[0] + '.csv')
@@ -127,6 +131,14 @@ def select_prep_json_file():
         prep_json_entry.insert(0, json_path)
 
 
+def select_rathcelon_json_file():
+    """NEW function to select the JSON file for the 'Run' step."""
+    json_path = filedialog.askopenfilename(filetypes=[("JSON files", "*.json")])
+    if json_path:
+        rathcelon_json_entry.delete(0, tk.END)
+        rathcelon_json_entry.insert(0, json_path)
+
+
 def select_prep_csv_file():
     csv_path = filedialog.asksaveasfilename(filetypes=[("CSV files", "*.csv")], defaultextension=".csv")
     if csv_path:
@@ -134,10 +146,10 @@ def select_prep_csv_file():
         prep_csv_entry.insert(0, csv_path)
 
 
-def threaded_create_input_file():
+def threaded_prepare_data():
     """
-    This function runs in a separate thread.
-    It contains all the core logic, error handling, and status updates for Prep Tab.
+    This function now ONLY prepares data and creates the input files.
+    It no longer runs the rathcelon analysis.
     """
     try:
         # --- 1. Get all values from GUI ---
@@ -181,7 +193,7 @@ def threaded_create_input_file():
                 status_var.set("Error: Could not load NWM dataset.")
                 nwm_ds = None
 
-                # --- 5. Main Processing Loop ---
+        # --- 5. Main Processing Loop ---
         total_dams = len(lhd_df)
         processed_dams_count = 0
         final_df = lhd_df.copy()
@@ -248,42 +260,21 @@ def threaded_create_input_file():
                 status_var.set(f"Error on Dam {dam_id}: {e}. Skipping.")
                 continue
 
-                # --- 6. Final Output Generation (CSV/Excel) ---
+        # --- 6. Final Output Generation (CSV/Excel/JSON) ---
         if processed_dams_count > 0:
             status_var.set("Saving updated database files...")
-
             final_df.to_csv(lhd_csv, index=False)
             final_df.to_excel(lhd_xlsx, index=False)
 
             status_var.set("Creating rathcelon_input.json...")
             json_loc = prep_json_entry.get()
 
-            dam_dictionaries = cj.rathcelon_input(lhd_csv, json_loc, hydrography, hydrology)
+            # This function now also returns the dam dictionaries
+            cj.rathcelon_input(lhd_csv, json_loc, hydrography, hydrology)
 
-            status_var.set(f"Data prep complete. Now running RathCelon analysis...")
-
-            # --- 7. RUN RATHCELON PROCESS ---
-            if not dam_dictionaries:
-                status_var.set("No dams to process in RathCelon.")
-                return
-
-            rathcelon_success_count = 0
-            for i, dam_dict in enumerate(dam_dictionaries):
-                dam_name = dam_dict.get('name', f"Dam {i + 1}")
-                try:
-                    status_var.set(f"RathCelon: Processing Dam {dam_name} ({i + 1} of {len(dam_dictionaries)})...")
-
-                    dam_i = RathcelonDam(**dam_dict)
-                    dam_i.process_dam()
-
-                    rathcelon_success_count += 1
-                except Exception as e:
-                    print(f"RathCelon failed for dam {dam_name}: {e}")
-                    status_var.set(f"RathCelon Error on Dam {dam_name}. Skipping.")
-
-            status_var.set(f"Process complete. {rathcelon_success_count} dams processed by RathCelon.")
-            messagebox.showinfo("Success", f"Process complete. {rathcelon_success_count} dams processed by RathCelon.")
-
+            status_var.set(f"Data preparation complete. {processed_dams_count} dams prepped.")
+            messagebox.showinfo("Success", f"Data preparation complete.\n{processed_dams_count} dams processed.\n"
+                                           f"Input file created at:\n{json_loc}")
         else:
             status_var.set("No dams were pre-processed successfully.")
             messagebox.showwarning("Process Finished", "No new dam data was pre-processed successfully.")
@@ -292,21 +283,81 @@ def threaded_create_input_file():
         status_var.set(f"Fatal error: {e}")
         messagebox.showerror("Fatal Error", f"The process failed:\n{e}")
     finally:
-        # --- 8. Re-enable button ---
+        # --- 7. Re-enable button ---
         prep_run_button.config(state=tk.NORMAL)
 
 
+def threaded_run_rathcelon():
+    """
+    This new function ONLY runs the Rathcelon analysis using a selected JSON file.
+    """
+    try:
+        # --- 1. Get JSON file path ---
+        json_loc = rathcelon_json_entry.get()
+        if not os.path.exists(json_loc):
+            messagebox.showerror("Error", f"RathCelon input file not found:\n{json_loc}")
+            return
+
+        status_var.set(f"Loading input file: {os.path.basename(json_loc)}...")
+
+        # --- 2. Load and parse JSON ---
+        with open(json_loc, 'r') as f:
+            data = json.load(f)
+
+        dam_dictionaries = data.get("dams", [])
+        if not dam_dictionaries:
+            status_var.set("No dams found in the selected JSON file.")
+            messagebox.showwarning("Empty File", "No dams to process in the selected JSON file.")
+            return
+
+        # --- 3. RUN RATHCELON PROCESS ---
+        status_var.set(f"Starting RathCelon analysis for {len(dam_dictionaries)} dams...")
+        rathcelon_success_count = 0
+        total_dams = len(dam_dictionaries)
+
+        for i, dam_dict in enumerate(dam_dictionaries):
+            dam_name = dam_dict.get('name', f"Dam {i + 1}")
+            try:
+                status_var.set(f"RathCelon: Processing Dam {dam_name} ({i + 1} of {total_dams})...")
+
+                dam_i = RathcelonDam(**dam_dict)
+                dam_i.process_dam()
+
+                rathcelon_success_count += 1
+            except Exception as e:
+                print(f"RathCelon failed for dam {dam_name}: {e}")
+                status_var.set(f"RathCelon Error on Dam {dam_name}. Skipping.")
+                # Continue to the next dam
+
+        status_var.set(f"RathCelon process complete. {rathcelon_success_count} dams processed.")
+        messagebox.showinfo("Success", f"RathCelon process complete.\n{rathcelon_success_count} dams processed.")
+
+    except Exception as e:
+        status_var.set(f"Fatal error during RathCelon run: {e}")
+        messagebox.showerror("Fatal Error", f"The RathCelon process failed:\n{e}")
+    finally:
+        # --- 4. Re-enable button ---
+        rathcelon_run_button.config(state=tk.NORMAL)
+
+
 def start_prep_thread():
-    """Triggers the preparation and rathcelon processing thread."""
+    """Triggers the preparation thread."""
     prep_run_button.config(state=tk.DISABLED)
-    status_var.set("Starting process...")
-    threading.Thread(target=threaded_create_input_file, daemon=True).start()
+    status_var.set("Starting data preparation...")
+    threading.Thread(target=threaded_prepare_data, daemon=True).start()
+
+
+def start_rathcelon_run_thread():
+    """Triggers the Rathcelon analysis thread."""
+    rathcelon_run_button.config(state=tk.DISABLED)
+    status_var.set("Starting RathCelon analysis...")
+    threading.Thread(target=threaded_run_rathcelon, daemon=True).start()
 
 
 # ===================================================================
 #
 # TAB 2: ANALYSIS & VISUALIZATION FUNCTIONS
-# (Based on src/analysis/main.py)
+# (All functions from here down are for the Analysis tab and remain unchanged)
 #
 # ===================================================================
 
@@ -343,22 +394,17 @@ def update_analysis_dropdown():
         try:
             dam_strs = analysis_successful_runs(results_dir)
 
-            # --- MODIFICATION START ---
-            # Safely convert dam IDs (folder names) to integers
+            # --- Safely convert folder names ---
             dams_int = []
             for d in dam_strs:
                 try:
                     dams_int.append(int(d))
                 except ValueError:
-                    # This will skip non-numeric folders like '.DS_Store'
                     print(f"Analysis tab: Skipping non-numeric directory '{d}'")
 
             dams_sorted = sorted(dams_int)
-
-            # Create the final list with strings for the dropdown
-            # This makes the list type-consistent (all strings)
             dams = ["All Dams"] + [str(d) for d in dams_sorted]
-            # --- MODIFICATION END ---
+            # --- End modification ---
 
             analysis_dam_dropdown['values'] = dams
             if dams:
@@ -487,7 +533,15 @@ def threaded_process_ARC():
 
         if selected_dam == "All Dams":
             dam_strs = analysis_successful_runs(results_dir)
-            dam_ints = sorted([int(d) for d in dam_strs])
+
+            dams_int = []
+            for d in dam_strs:
+                try:
+                    dams_int.append(int(d))
+                except ValueError:
+                    pass  # Skip non-numeric folders
+
+            dam_ints = sorted(dams_int)
             total_dams = len(dam_ints)
             for i, dam_id in enumerate(dam_ints):
                 status_var.set(f"Analyzing Dam {dam_id} ({i + 1} of {total_dams})...")
@@ -550,7 +604,6 @@ def threaded_process_ARC():
         status_var.set("Analysis complete.")
 
         # --- After thread is done, call the setup function on the main thread ---
-        # `root.after` schedules this function to run on the main UI thread
         root.after(0, setup_figure_carousel, figures_to_display)
 
     except Exception as e:
@@ -742,12 +795,16 @@ notebook.add(analysis_tab, text="  Analysis & Visualization  ")
 notebook.pack(expand=True, fill="both", padx=10, pady=10)
 
 # ===================================================================
-# --- GUI: PREPARATION TAB ---
+# --- GUI: PREPARATION TAB (NOW SPLIT INTO TWO STEPS) ---
 # ===================================================================
 
+# --- Frame for Step 1: Data Preparation ---
+prep_data_frame = ttk.LabelFrame(prep_tab, text="Step 1: Prepare Data and Create Input File")
+prep_data_frame.pack(pady=10, padx=10, fill=tk.X)
+
 # --- Project Directory Selection ---
-prep_project_frame = ttk.LabelFrame(prep_tab, text="Project Folder")
-prep_project_frame.pack(pady=10, padx=10, fill=tk.X)
+prep_project_frame = ttk.Frame(prep_data_frame)
+prep_project_frame.pack(pady=5, padx=10, fill=tk.X)
 prep_project_frame.columnconfigure(1, weight=1)
 ttk.Button(prep_project_frame, text="Select Project Folder", command=select_prep_project_dir).grid(row=0, column=0,
                                                                                                    padx=5, pady=5,
@@ -756,7 +813,7 @@ prep_project_entry = ttk.Entry(prep_project_frame)
 prep_project_entry.grid(row=0, column=1, padx=5, pady=5, sticky=tk.EW)
 
 # --- Database Selection ---
-prep_database_frame = ttk.LabelFrame(prep_tab, text="Input Database")
+prep_database_frame = ttk.Frame(prep_data_frame)
 prep_database_frame.pack(pady=5, padx=10, fill=tk.X)
 prep_database_frame.columnconfigure(1, weight=1)
 ttk.Button(prep_database_frame, text="Select Database File (.xlsx)", command=select_prep_database_file).grid(row=0,
@@ -768,8 +825,8 @@ prep_database_entry = ttk.Entry(prep_database_frame)
 prep_database_entry.grid(row=0, column=1, padx=5, pady=5, sticky=tk.EW)
 
 # --- Output Locations ---
-prep_results_frame = ttk.LabelFrame(prep_tab, text="Output Locations")
-prep_results_frame.pack(pady=10, padx=10, fill=tk.X)
+prep_results_frame = ttk.Frame(prep_data_frame)
+prep_results_frame.pack(pady=5, padx=10, fill=tk.X)
 prep_results_frame.columnconfigure(1, weight=1)
 ttk.Button(prep_results_frame, text="Select DEM Folder", command=select_prep_dem_dir).grid(row=0, column=0, padx=5,
                                                                                            pady=5, sticky=tk.W)
@@ -798,8 +855,8 @@ prep_csv_entry = ttk.Entry(prep_results_frame)
 prep_csv_entry.grid(row=4, column=1, padx=5, pady=5, sticky=tk.EW)
 
 # --- Hydraulics and Hydrology Settings ---
-prep_hydro_frame = ttk.LabelFrame(prep_tab, text="Hydrologic Data Information")
-prep_hydro_frame.pack(pady=10, padx=10, fill=tk.X)
+prep_hydro_frame = ttk.Frame(prep_data_frame)
+prep_hydro_frame.pack(pady=5, padx=10, fill=tk.X)
 prep_hydro_frame.columnconfigure(1, weight=1)
 ttk.Label(prep_hydro_frame, text="Hydrography Data Source:").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
 prep_hydro_var = tk.StringVar(value="NHDPlus")
@@ -819,13 +876,31 @@ prep_logy_dropdown.grid(row=2, column=1, padx=5, pady=5, sticky=tk.EW)
 ttk.Label(prep_hydro_frame, text="Baseflow Estimation:").grid(row=3, column=0, padx=5, pady=5, sticky=tk.W)
 prep_baseflow_var = tk.StringVar(value="WSE and LiDAR Date")
 prep_baseflow_dropdown = ttk.Combobox(prep_hydro_frame, textvariable=prep_baseflow_var, state="readonly", values=(
-"WSE and LiDAR Date", "WSE and Median Daily Flow", "2-yr Flow and Bank Estimation"))
+    "WSE and LiDAR Date", "WSE and Median Daily Flow", "2-yr Flow and Bank Estimation"))
 prep_baseflow_dropdown.grid(row=3, column=1, padx=5, pady=5, sticky=tk.EW)
 
-# --- Run function button ---
-prep_run_button = ttk.Button(prep_tab, text="Prepare Data and Run RathCelon", command=start_prep_thread,
+# --- Run function button (Step 1) ---
+prep_run_button = ttk.Button(prep_data_frame, text="1. Prepare Data & Create Input File", command=start_prep_thread,
                              style="Accent.TButton")
 prep_run_button.pack(pady=10, padx=10, fill=tk.X, ipady=5)
+
+# --- Frame for Step 2: Run Rathcelon ---
+run_rathcelon_frame = ttk.LabelFrame(prep_tab, text="Step 2: Run Rathcelon Processing")
+run_rathcelon_frame.pack(pady=10, padx=10, fill=tk.X)
+run_rathcelon_frame.columnconfigure(1, weight=1)
+
+ttk.Button(run_rathcelon_frame, text="Select Input File (.json)", command=select_rathcelon_json_file).grid(row=0,
+                                                                                                           column=0,
+                                                                                                           padx=5,
+                                                                                                           pady=5,
+                                                                                                           sticky=tk.W)
+rathcelon_json_entry = ttk.Entry(run_rathcelon_frame)
+rathcelon_json_entry.grid(row=0, column=1, padx=5, pady=5, sticky=tk.EW)
+
+rathcelon_run_button = ttk.Button(run_rathcelon_frame, text="2. Run RathCelon Analysis",
+                                  command=start_rathcelon_run_thread,
+                                  style="Accent.TButton")
+rathcelon_run_button.grid(row=1, column=0, columnspan=2, padx=5, pady=10, sticky=tk.EW, ipady=5)
 
 # ===================================================================
 # --- GUI: ANALYSIS TAB ---
@@ -908,9 +983,6 @@ analysis_summary_button.grid(row=0, column=1, padx=5, ipady=5, sticky=tk.EW)
 
 # --- Analysis: NEW Figure Viewer Frame ---
 analysis_figure_viewer_frame = ttk.LabelFrame(analysis_tab, text="Figure Viewer")
-# We use .pack() here but we will .pack_forget() to hide it initially
-# It will be packed at the TOP, but since it's after the other frames, it will appear at the bottom.
-# To make it fill the remaining space, we pack it *last* and set expand=True
 analysis_figure_viewer_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
 # This frame will hold the matplotlib canvas
