@@ -1,0 +1,22 @@
+name: lhd-environment
+channels:
+  - conda-forge
+dependencies:
+  # Core Python
+  - python=3.10
+  - pip
+
+  # Scientific & GIS Packages (from conda-forge for stability)
+  - geopandas
+  - matplotlib
+  - numpy
+  - pandas
+  - xarray
+  - rasterio
+  - scipy
+  - openpyxl  # For pd.read_excel()
+
+  # External Packages (installed via pip from GitHub)
+  - pip:
+    - git+https://github.com/jlgutenson/rathcelon.git
+    - git+https://github.com/MikeFHS/automated-rating-curve.git
