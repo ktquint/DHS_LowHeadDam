@@ -185,7 +185,7 @@ def threaded_prepare_data():
         if hydrology == 'National Water Model':
             status_var.set("Loading NWM dataset...")
             try:
-                s3_path = 's3://noaa-nwm-retrospective-2-1-zarr-pds/chrtout.zarr'
+                s3_path = 's3://noaa-nwm-retrospective-3-0-pds/CONUS/zarr/chrtout.zarr'
                 nwm_ds = xr.open_zarr(s3_path, consolidated=True, storage_options={"anon": True})
                 status_var.set("NWM dataset loaded.")
             except Exception as e:
@@ -247,7 +247,13 @@ def threaded_prepare_data():
 
                 for key, value in dam.__dict__.items():
                     if key in final_df.columns:
-                        final_df.loc[i, key] = value
+                        # Check if the value is a list or numpy array
+                        if isinstance(value, (list, np.ndarray)):
+                            # Convert it to a string representation before saving
+                            final_df.loc[i, key] = str(value)
+                        else:
+                            # Otherwise, assign it directly
+                            final_df.loc[i, key] = value
 
                 processed_dams_count += 1
                 print(f'Finished Prep for Dam No. {dam_id}')

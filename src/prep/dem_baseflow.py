@@ -146,7 +146,7 @@ def find_water_gpstime(lat, lon):
 
             return full_gps_time
 
-    except laspy.errors.MissingLazBackend as e:
+    except (ImportError, laspy.errors.LaspyException) as e:
         print("=" * 50)
         print("ERROR: FAILED TO READ LIDAR FILE")
         print(f"File: {las_path}")
