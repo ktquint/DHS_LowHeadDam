@@ -11,7 +11,7 @@ import geopandas as gpd
 import xarray as xr
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from matplotlib.figure import Figure  # Import Figure
+from matplotlib.figure import Figure
 
 # --- Main Application Imports ---
 # Import helper modules from your project
@@ -79,10 +79,10 @@ def select_prep_project_dir():
         prep_results_entry.insert(0, results_path)
 
         # Auto-populate both the creation path and the run path for the JSON
-        json_path = os.path.join(project_path, "rathcelon_input.json")
+        json_path = os.path.splitext(database_path)[0] + '.json'
         prep_json_entry.delete(0, tk.END)
         prep_json_entry.insert(0, json_path)
-        rathcelon_json_entry.delete(0, tk.END)  # Also populate the new entry field
+        rathcelon_json_entry.delete(0, tk.END)
         rathcelon_json_entry.insert(0, json_path)
 
         prep_csv_entry.delete(0, tk.END)
@@ -101,6 +101,12 @@ def select_prep_database_file():
     if file_path:
         prep_database_entry.delete(0, tk.END)
         prep_database_entry.insert(0, file_path)
+
+        prep_csv_entry.delete(0, tk.END)
+        prep_csv_entry.insert(0, os.path.splitext(file_path)[0] + '.csv')
+
+        prep_json_entry.delete(0, tk.END)
+        prep_json_entry.insert(0, os.path.splitext(file_path)[0] + '.json')
 
 
 def select_prep_dem_dir():
@@ -148,8 +154,7 @@ def select_prep_csv_file():
 
 def threaded_prepare_data():
     """
-    This function now ONLY prepares data and creates the input files.
-    It no longer runs the rathcelon analysis.
+    This function now prepares data and creates the input files.
     """
     try:
         # --- 1. Get all values from GUI ---
@@ -179,6 +184,21 @@ def threaded_prepare_data():
         os.makedirs(results_folder, exist_ok=True)
 
         lhd_df = pd.read_excel(lhd_xlsx)
+        final_df = lhd_df.copy()
+
+        # We just use the first row as an example to get the attribute names
+        try:
+            sample_dam_dict = PrepDam(**lhd_df.iloc[0].to_dict()).__dict__
+            cols_to_update = [key for key in sample_dam_dict.keys() if key in final_df.columns]
+
+            # Change the type of these columns to 'object' in the DataFrame
+            for col in cols_to_update:
+                if final_df[col].dtype != 'object':
+                    final_df[col] = final_df[col].astype(object)
+
+            status_var.set("DataFrame types prepared.")
+        except Exception as e:
+            print(f"Warning: Could not pre-set DataFrame dtypes: {e}")
 
         # --- 4. Load NWM data once ---
         nwm_ds = None
@@ -196,7 +216,6 @@ def threaded_prepare_data():
         # --- 5. Main Processing Loop ---
         total_dams = len(lhd_df)
         processed_dams_count = 0
-        final_df = lhd_df.copy()
 
         for i, row in lhd_df.iterrows():
             i = int(str(i))

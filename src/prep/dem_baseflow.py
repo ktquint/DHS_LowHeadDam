@@ -123,25 +123,46 @@ def find_water_gpstime(lat, lon):
 
             easting, northing = transformer.transform(lon, lat)
 
-            # Filter for water points (classification 9)
-            water_mask = las.classification == 9
-            if not np.any(water_mask):
-                print("No water-classified points found.")
-                return None
-
+            # Get all points and times
             x = las.x
             y = las.y
+            gpstimes = las.gps_time
 
-            water_points = np.vstack((x[water_mask], y[water_mask])).T
-            tree = cKDTree(water_points)
-            dist, idx = tree.query([easting, northing])
+            # --- MODIFICATION START ---
 
-            if dist > 100:
-                print("No nearby water point found.")
+            # First, try to find a water point (classification 9)
+            water_mask = las.classification == 9
+            if np.any(water_mask):
+                print("Water-classified points found. Searching for nearest water point...")
+                water_points = np.vstack((x[water_mask], y[water_mask])).T
+                water_tree = cKDTree(water_points)
+                dist, idx = water_tree.query([easting, northing])
+
+                if dist <= 100:  # Found a nearby water point
+                    print(f"Found nearby water point (dist: {dist:.2f}m).")
+                    water_gpstimes = gpstimes[water_mask]
+                    adjusted_time = water_gpstimes[idx]
+                    full_gps_time = adjusted_time + 1_000_000_000
+                    return full_gps_time
+                else:
+                    print(f"Nearest water point is too far (dist: {dist:.2f}m).")
+            else:
+                print("No water-classified points found.")
+
+            # Fallback: If no water points were found, or they were too far
+            print("Fallback: Searching for the absolute nearest point of ANY classification...")
+
+            all_points = np.vstack((x, y)).T
+            all_tree = cKDTree(all_points)
+            dist, idx = all_tree.query([easting, northing])
+
+            # You might still want a reasonable distance threshold
+            if dist > 100:  # If even the *nearest* point is > 100m away, something is wrong
+                print(f"No nearby points of any kind found within 100m (nearest dist: {dist:.2f}m).")
                 return None
 
-            gpstimes = las.gps_time[water_mask]
-            adjusted_time = gpstimes[idx]
+            print(f"Found absolute nearest point (dist: {dist:.2f}m) with classification: {las.classification[idx]}")
+            adjusted_time = gpstimes[idx]  # Use the index on the *full* gpstimes array
             full_gps_time = adjusted_time + 1_000_000_000  # adjust to standard GPS time
 
             return full_gps_time
