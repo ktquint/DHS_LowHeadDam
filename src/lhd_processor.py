@@ -358,7 +358,7 @@ def threaded_run_rathcelon():
         messagebox.showinfo("Success", f"RathCelon process complete.\n{rathcelon_success_count} dams processed.")
 
     except Exception as e:
-        status_var.set(f"Fatal error during RathCelon run: {e}")
+        status_var.set(f"Fatal error during Rathcelon run: {e}")
         messagebox.showerror("Fatal Error", f"The RathCelon process failed:\n{e}")
     finally:
         # --- 4. Re-enable button ---
@@ -382,7 +382,7 @@ def start_rathcelon_run_thread():
 # ===================================================================
 #
 # TAB 2: ANALYSIS & VISUALIZATION FUNCTIONS
-# (All functions from here down are for the Analysis tab and remain unchanged)
+# (All functions from here down are for the Analysis tab)
 #
 # ===================================================================
 
@@ -392,54 +392,97 @@ current_figure_index = 0
 current_figure_canvas = None
 
 
-def analysis_successful_runs(results_dir):
-    """Finds all dams in the results_dir that have valid output."""
-    dam_nos = [str(d) for d in os.listdir(results_dir) if os.path.isdir(os.path.join(results_dir, d))]
-    successes = []
+def analysis_successful_runs(results_dir, database_csv):
+    """
+    Finds all dams in the results_dir that have valid output,
+    but ONLY checks for dams listed in the database_csv.
+    """
+    # --- 1. Get dams from CSV database ---
+    try:
+        lhd_df = pd.read_csv(database_csv)
+        if 'ID' not in lhd_df.columns:
+            print("Analysis tab: Database CSV must have an 'ID' column.")
+            return []
+        # Get a clean set of 'ID's as strings
+        dam_nos_from_csv = set(pd.to_numeric(lhd_df['ID'], errors='coerce').dropna().astype(int).astype(str).tolist())
+    except Exception as e:
+        print(f"Error reading database CSV {database_csv}: {e}")
+        return []
 
-    for lhd_id in dam_nos:
+    if not dam_nos_from_csv:
+        print("No dams found in the database CSV.")
+        return []
+
+    # --- 2. Check which of those dams have successful runs ---
+    successes = []
+    for lhd_id in dam_nos_from_csv:
         run_results_dir = os.path.join(results_dir, lhd_id)
-        local_vdt_gpkg = os.path.join(run_results_dir, "VDT", f"{lhd_id}_Local_VDT_Database.gpkg")
+
+        # Skip if the corresponding folder doesn't even exist
+        if not os.path.isdir(run_results_dir):
+            continue
+
+        # Check for the specific success file
+        local_vdt_gpkg = os.path.join(str(run_results_dir), "VDT", f"{lhd_id}_Local_VDT_Database.gpkg")
         if not os.path.exists(local_vdt_gpkg):
             continue
+
+        # Finally, check if the file is valid and not empty
         try:
             local_vdt_gdf = gpd.read_file(local_vdt_gpkg)
             if not local_vdt_gdf.empty:
-                successes.append(lhd_id)
+                successes.append(lhd_id)  # Add the string ID
         except Exception as e:
             print(f"Error reading GPKG for {lhd_id}: {e}")
             continue
+
     return successes
 
 
 def update_analysis_dropdown():
     """Updates the dam selection dropdown on the Analysis tab."""
     results_dir = analysis_results_entry.get()
-    if os.path.isdir(results_dir):
-        try:
-            dam_strs = analysis_successful_runs(results_dir)
+    database_csv = analysis_database_entry.get()
 
-            # --- Safely convert folder names ---
-            dams_int = []
-            for d in dam_strs:
-                try:
-                    dams_int.append(int(d))
-                except ValueError:
-                    print(f"Analysis tab: Skipping non-numeric directory '{d}'")
-
-            dams_sorted = sorted(dams_int)
-            dams = ["All Dams"] + [str(d) for d in dams_sorted]
-            # --- End modification ---
-
-            analysis_dam_dropdown['values'] = dams
-            if dams:
-                analysis_dam_dropdown.set(dams[0])
-            status_var.set(f"Found {len(dams) - 1} processed dams for analysis.")
-        except Exception as e:
-            analysis_dam_dropdown.set("Error")
-            status_var.set(f"Error reading results folder: {e}")
-    else:
+    # --- 1. Validate paths ---
+    if not os.path.isdir(results_dir):
+        analysis_dam_dropdown['values'] = []
         analysis_dam_dropdown.set("Invalid results path")
+        status_var.set("Invalid results path. Please select a valid folder.")
+        return
+
+    if not os.path.isfile(database_csv):
+        analysis_dam_dropdown['values'] = []
+        analysis_dam_dropdown.set("Invalid database path")
+        status_var.set("Invalid database .csv. Please select a valid file.")
+        return
+
+    try:
+        # --- 2. Get successfully run dams that are in the CSV ---
+        # This call is now much more efficient
+        dam_strs = analysis_successful_runs(results_dir, database_csv)
+
+        # --- 3. Populate dropdown ---
+        dams_int = []
+        for d in dam_strs:
+            try:
+                dams_int.append(int(d))
+            except ValueError:
+                print(f"Analysis tab: Skipping non-numeric success ID '{d}'")
+
+        dams_sorted = sorted(dams_int)
+        dams = ["All Dams"] + [str(d) for d in dams_sorted]
+
+        analysis_dam_dropdown['values'] = dams
+        if dams:
+            analysis_dam_dropdown.set(dams[0])
+
+        status_var.set(f"Found {len(dams) - 1} processed dams from database for analysis.")
+
+    except Exception as e:
+        analysis_dam_dropdown['values'] = []
+        analysis_dam_dropdown.set("Error")
+        status_var.set(f"Error updating dropdown: {e}")
 
 
 def select_analysis_csv_file():
@@ -534,9 +577,12 @@ def setup_figure_carousel(figures_list):
 # --- Core Logic Functions (for Tab 2) ---
 
 def threaded_process_ARC():
-    """Runs the analysis for selected dams in a thread."""
+    """
+    Runs the analysis for selected dams in a thread.
+    This function ONLY saves data and figures, it does not display them.
+    """
     try:
-        status_var.set("Starting analysis...")
+        status_var.set("Starting data processing...")
         analysis_run_button.config(state=tk.DISABLED)
         analysis_summary_button.config(state=tk.DISABLED)
 
@@ -553,11 +599,9 @@ def threaded_process_ARC():
             return
 
         selected_dam = analysis_dam_dropdown.get()
-        plot_figs_on_run = (selected_dam != "All Dams")
-        figures_to_display = []  # This will hold (fig, title) tuples
 
         if selected_dam == "All Dams":
-            dam_strs = analysis_successful_runs(results_dir)
+            dam_strs = analysis_successful_runs(results_dir, database_csv)
 
             dams_int = []
             for d in dam_strs:
@@ -569,55 +613,49 @@ def threaded_process_ARC():
             dam_ints = sorted(dams_int)
             total_dams = len(dam_ints)
             for i, dam_id in enumerate(dam_ints):
-                status_var.set(f"Analyzing Dam {dam_id} ({i + 1} of {total_dams})...")
-                print(f"Analyzing Dam No. {dam_id}")
-                dam_i = AnalysisDam(int(dam_id), database_csv, selected_model, estimate_dam)
-                # When "All Dams" is selected, just save figs
-                for xs in dam_i.cross_sections:
-                    plt.close(xs.plot_cross_section())  # Plot and close to save
-                for xs in dam_i.cross_sections[1:]:
-                    plt.close(xs.create_combined_fig())  # Plot and close to save
-                    plt.close(xs.create_combined_fdc())  # Plot and close to save
-                plt.close(dam_i.plot_map())  # Plot and close to save
-                plt.close(dam_i.plot_water_surface())  # Plot and close to save
-                print("Onto the next one! :)")
+                try:  # <--- START OF ERROR HANDLING
+                    status_var.set(f"Analyzing Dam {dam_id} ({i + 1} of {total_dams})...")
+                    print(f"Analyzing Dam No. {dam_id}")
+                    dam_i = AnalysisDam(int(dam_id), database_csv, selected_model, estimate_dam)
+
+                    # When "All Dams" is selected, just save figs
+                    for xs in dam_i.cross_sections:
+                        plt.close(xs.plot_cross_section())  # Plot and close to save
+                    for xs in dam_i.cross_sections[1:]:
+                        plt.close(xs.create_combined_fig())  # Plot and close to save
+                        plt.close(xs.create_combined_fdc())  # Plot and close to save
+                    plt.close(dam_i.plot_map())  # Plot and close to save
+                    plt.close(dam_i.plot_water_surface())  # Plot and close to save
+                    print("Onto the next one! :)")
+
+                except ValueError as e:
+                    if "Invalid flow conditions" in str(e):
+                        print(f"---" * 20)
+                        print(f"SKIPPING Dam {dam_id}: {e}")
+                        print(f"---" * 20)
+                        status_var.set(f"Skipping Dam {dam_id} (Invalid flow)")
+                        continue  # Move to the next dam
+                    else:
+                        print(f"---" * 20)
+                        print(f"CRITICAL ValueError on Dam {dam_id}: {e}")
+                        print(f"---" * 20)
+                        status_var.set(f"Error on Dam {dam_id}. Skipping.")
+                        continue
+                except Exception as e:
+                    print(f"---" * 20)
+                    print(f"CRITICAL FAILED processing Dam {dam_id}: {e}")
+                    print(f"Skipping this dam and moving to the next one.")
+                    print(f"---" * 20)
+                    status_var.set(f"Error on Dam {dam_id}. Skipping.")
+                    continue
+                # <--- END OF ERROR HANDLING
 
         else:  # --- Logic for a single dam ---
-            status_var.set(f"Processing single Dam {selected_dam}...")
-            dam_i = AnalysisDam(int(selected_dam), database_csv, selected_model, estimate_dam)
+            try:  # <--- START OF ERROR HANDLING
+                status_var.set(f"Processing single Dam {selected_dam}...")
+                dam_i = AnalysisDam(int(selected_dam), database_csv, selected_model, estimate_dam)
 
-            # --- Generate figures if requested ---
-            if plot_figs_on_run:
-                if analysis_display_cross_section.get():
-                    for xs in dam_i.cross_sections:
-                        fig = xs.plot_cross_section()
-                        title = f"Cross Section {xs.index} (Dam {dam_i.id})"
-                        figures_to_display.append((fig, title))
-
-                if analysis_display_rating_curves.get():
-                    for xs in dam_i.cross_sections[1:]:
-                        fig = xs.create_combined_fig()
-                        title = f"Rating Curve {xs.index} (Dam {dam_i.id})"
-                        figures_to_display.append((fig, title))
-
-                if analysis_display_map.get():
-                    fig = dam_i.plot_map()
-                    title = f"Dam Location (Dam {dam_i.id})"
-                    figures_to_display.append((fig, title))
-
-                if analysis_display_wsp.get():
-                    fig = dam_i.plot_water_surface()
-                    title = f"Water Surface Profile (Dam {dam_i.id})"
-                    figures_to_display.append((fig, title))
-
-                if analysis_display_fdc.get():
-                    for xs in dam_i.cross_sections[1:]:
-                        fig = xs.create_combined_fdc()
-                        title = f"Flow Duration Curve {xs.index} (Dam {dam_i.id})"
-                        figures_to_display.append((fig, title))
-
-            # Also save figs for the single dam, close them so they don't pop up
-            if not plot_figs_on_run:
+                # Just save the figures, do not display
                 for xs in dam_i.cross_sections:
                     plt.close(xs.plot_cross_section())
                 for xs in dam_i.cross_sections[1:]:
@@ -625,11 +663,32 @@ def threaded_process_ARC():
                     plt.close(xs.create_combined_fdc())
                 plt.close(dam_i.plot_map())
                 plt.close(dam_i.plot_water_surface())
+                print(f"Finished processing and saving figures for Dam {selected_dam}.")
 
-        status_var.set("Analysis complete.")
+            except ValueError as e:  # <--- ADDED ERROR HANDLING
+                if "Invalid flow conditions" in str(e):
+                    print(f"---" * 20)
+                    print(f"ERROR on Dam {selected_dam}: {e}")
+                    print(f"---" * 20)
+                    status_var.set(f"Failed Dam {selected_dam} (Invalid flow)")
+                    messagebox.showerror("Analysis Error", f"Failed to process Dam {selected_dam}:\n{e}")
+                else:
+                    print(f"---" * 20)
+                    print(f"CRITICAL ValueError on Dam {selected_dam}: {e}")
+                    print(f"---" * 20)
+                    status_var.set(f"Error on Dam {selected_dam}.")
+                    messagebox.showerror("Analysis Error", f"A value error occurred on Dam {selected_dam}:\n{e}")
 
-        # --- After thread is done, call the setup function on the main thread ---
-        root.after(0, setup_figure_carousel, figures_to_display)
+            except Exception as e:  # <--- ADDED ERROR HANDLING
+                print(f"---" * 20)
+                print(f"CRITICAL FAILED processing Dam {selected_dam}: {e}")
+                print(f"---" * 20)
+                status_var.set(f"Error on Dam {selected_dam}.")
+                messagebox.showerror("Analysis Error", f"A critical error occurred on Dam {selected_dam}:\n{e}")
+                # <--- END OF ADDED ERROR HANDLING
+
+        status_var.set("Analysis processing complete.")
+        messagebox.showinfo("Success", f"Finished processing data for {selected_dam}.")
 
     except Exception as e:
         status_var.set(f"Error during analysis: {e}")
@@ -639,10 +698,80 @@ def threaded_process_ARC():
         analysis_summary_button.config(state=tk.NORMAL)
 
 
+def threaded_display_dam_figures():
+    """
+    NEW Function.
+    Generates and displays figures for a SINGLE selected dam in the carousel.
+    """
+    figures_to_display = []
+    try:
+        status_var.set("Generating figures for display...")
+        analysis_display_button.config(state=tk.DISABLED)
+
+        database_csv = analysis_database_entry.get()
+        results_dir = analysis_results_entry.get()
+        selected_model = analysis_model_var.get()
+        estimate_dam = analysis_estimate_dam_var.get()
+        selected_dam = analysis_dam_dropdown.get()
+
+        if not os.path.exists(database_csv) or not os.path.isdir(results_dir):
+            messagebox.showerror("Error", "Database or Results path is invalid.")
+            return
+
+        if selected_dam == "All Dams":
+            messagebox.showinfo("Select Dam", "Please select a single dam from the dropdown to display figures.")
+            return
+
+        # --- Logic for a single dam ---
+        status_var.set(f"Loading Dam {selected_dam} for display...")
+        dam_i = AnalysisDam(int(selected_dam), database_csv, selected_model, estimate_dam)
+
+        if analysis_display_cross_section.get():
+            for xs in dam_i.cross_sections:
+                fig = xs.plot_cross_section()
+                title = f"Cross Section {xs.index} (Dam {dam_i.id})"
+                figures_to_display.append((fig, title))
+
+        if analysis_display_rating_curves.get():
+            for xs in dam_i.cross_sections[1:]:
+                fig = xs.create_combined_fig()
+                title = f"Rating Curve {xs.index} (Dam {dam_i.id})"
+                figures_to_display.append((fig, title))
+
+        if analysis_display_map.get():
+            fig = dam_i.plot_map()
+            title = f"Dam Location (Dam {dam_i.id})"
+            figures_to_display.append((fig, title))
+
+        if analysis_display_wsp.get():
+            fig = dam_i.plot_water_surface()
+            title = f"Water Surface Profile (Dam {dam_i.id})"
+            figures_to_display.append((fig, title))
+
+        if analysis_display_fdc.get():
+            for xs in dam_i.cross_sections[1:]:
+                fig = xs.create_combined_fdc()
+                title = f"Flow Duration Curve {xs.index} (Dam {dam_i.id})"
+                figures_to_display.append((fig, title))
+
+        status_var.set(f"Generated {len(figures_to_display)} figures for Dam {selected_dam}.")
+
+        # --- After thread is done, call the setup function on the main thread ---
+        root.after(0, setup_figure_carousel, figures_to_display)
+
+    except Exception as e:
+        status_var.set(f"Error generating figures: {e}")
+        messagebox.showerror("Figure Generation Error", f"An error occurred while generating figures:\n{e}")
+        # noinspection PyTypeChecker
+        root.after(0, clear_figure_carousel) # Clear carousel on error
+    finally:
+        analysis_display_button.config(state=tk.NORMAL)
+
+
 def threaded_plot_shj():
     """Runs the summary plot generation in a thread."""
     try:
-        status_var.set("Starting to generate summary figures...")
+        status_var.set("Starting to generate summary bar chart...")
         analysis_run_button.config(state=tk.DISABLED)
         analysis_summary_button.config(state=tk.DISABLED)
 
@@ -653,7 +782,7 @@ def threaded_plot_shj():
 
         lhd_df = pd.read_csv(lhd_df_path)
 
-        # --- This creates a new pop-up window, as summary plots are different ---
+        # --- This creates a new pop-up window ---
         win = tk.Toplevel(root)
         win.title("All Summary Figures")
         win.geometry("1200x600")
@@ -768,7 +897,7 @@ def threaded_plot_shj():
             status_var.set("No data found to generate summary plots.")
             win.destroy()
         else:
-            status_var.set("Summary figures generated successfully.")
+            status_var.set("Summary bar chart generated successfully.")
     except Exception as e:
         status_var.set(f"Error plotting summary: {e}")
         messagebox.showerror("Plotting Error", f"Failed to generate summary plots:\n{e}")
@@ -782,8 +911,16 @@ def start_analysis_processing():
     clear_figure_carousel()  # Clear any old figures
     analysis_run_button.config(state=tk.DISABLED)
     analysis_summary_button.config(state=tk.DISABLED)
-    status_var.set("Starting analysis...")
+    status_var.set("Starting analysis processing...")
     threading.Thread(target=threaded_process_ARC, daemon=True).start()
+
+
+def start_display_dam_figures_thread():
+    """Triggers the NEW display figures thread."""
+    clear_figure_carousel()
+    analysis_display_button.config(state=tk.DISABLED)
+    status_var.set("Starting to generate dam figures...")
+    threading.Thread(target=threaded_display_dam_figures, daemon=True).start()
 
 
 def start_summary_plotting():
@@ -791,7 +928,7 @@ def start_summary_plotting():
     clear_figure_carousel()  # Clear any old figures
     analysis_run_button.config(state=tk.DISABLED)
     analysis_summary_button.config(state=tk.DISABLED)
-    status_var.set("Starting summary plot generation...")
+    status_var.set("Starting summary bar chart generation...")
     threading.Thread(target=threaded_plot_shj, daemon=True).start()
 
 
@@ -820,7 +957,7 @@ notebook.add(analysis_tab, text="  Analysis & Visualization  ")
 notebook.pack(expand=True, fill="both", padx=10, pady=10)
 
 # ===================================================================
-# --- GUI: PREPARATION TAB (NOW SPLIT INTO TWO STEPS) ---
+# --- GUI: PREPARATION TAB ---
 # ===================================================================
 
 # --- Frame for Step 1: Data Preparation ---
@@ -928,12 +1065,12 @@ rathcelon_run_button = ttk.Button(run_rathcelon_frame, text="2. Run RathCelon An
 rathcelon_run_button.grid(row=1, column=0, columnspan=2, padx=5, pady=10, sticky=tk.EW, ipady=5)
 
 # ===================================================================
-# --- GUI: ANALYSIS TAB ---
+# --- GUI: ANALYSIS TAB --- (*** RE-ORDERED ***)
 # ===================================================================
 
 # --- Analysis: Database and Results Paths ---
 analysis_path_frame = ttk.LabelFrame(analysis_tab, text="Database and Results Paths")
-analysis_path_frame.pack(pady=10, padx=10, fill=tk.X, side=tk.TOP)  # Pack at the top
+analysis_path_frame.pack(pady=10, padx=10, fill=tk.X, side=tk.TOP)
 analysis_path_frame.columnconfigure(1, weight=1)
 ttk.Button(analysis_path_frame, text="Select Database File (.csv)", command=select_analysis_csv_file).grid(row=0,
                                                                                                            column=0,
@@ -950,73 +1087,77 @@ analysis_results_entry.grid(row=1, column=1, padx=5, pady=5, sticky=tk.EW)
 
 # --- Analysis: Settings ---
 analysis_settings_frame = ttk.LabelFrame(analysis_tab, text="Analysis Settings")
-analysis_settings_frame.pack(pady=10, padx=10, fill=tk.X, side=tk.TOP)  # Pack at the top
+analysis_settings_frame.pack(pady=10, padx=10, fill=tk.X, side=tk.TOP)
 analysis_settings_frame.columnconfigure(1, weight=1)
 ttk.Label(analysis_settings_frame, text="Hydrologic Data Source:").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
 analysis_model_var = tk.StringVar(value="National Water Model")
 analysis_model_dropdown = ttk.Combobox(analysis_settings_frame, textvariable=analysis_model_var, state="readonly",
                                        values=("USGS", "GEOGLOWS", "National Water Model"))
 analysis_model_dropdown.grid(row=0, column=1, padx=5, pady=5, sticky=tk.EW)
-analysis_estimate_dam_var = tk.BooleanVar(value=False)
-analysis_checkbox = ttk.Checkbutton(analysis_settings_frame, text="Estimate Dam Height?",
+analysis_estimate_dam_var = tk.BooleanVar(value=True)
+analysis_checkbox = ttk.Checkbutton(analysis_settings_frame, text="Estimate Dam Height",
                                     variable=analysis_estimate_dam_var)
 analysis_checkbox.grid(row=1, column=0, columnspan=2, padx=5, pady=5, sticky=tk.W)
 ttk.Label(analysis_settings_frame, text="Dam(s) to Analyze:").grid(row=2, column=0, padx=5, pady=5, sticky=tk.W)
 analysis_dam_dropdown = ttk.Combobox(analysis_settings_frame, state="readonly")
 analysis_dam_dropdown.grid(row=2, column=1, padx=5, pady=5, sticky=tk.EW)
 
+# --- Analysis: Run Buttons ---
+analysis_button_frame = ttk.Frame(analysis_tab)
+analysis_button_frame.pack(pady=10, fill=tk.X, padx=10, side=tk.TOP)
+analysis_button_frame.columnconfigure(0, weight=1)
+analysis_button_frame.columnconfigure(1, weight=1)
+analysis_run_button = ttk.Button(analysis_button_frame, text="Process & Save Dam Data", command=start_analysis_processing)
+analysis_run_button.grid(row=0, column=0, padx=5, ipady=5, sticky=tk.EW)
+analysis_summary_button = ttk.Button(analysis_button_frame, text="Generate Bar Chart", # NEW BUTTON
+                                     command=start_summary_plotting)
+analysis_summary_button.grid(row=0, column=1, padx=5, ipady=5, sticky=tk.EW)
+
 # --- Analysis: Figure Display Options ---
 analysis_figure_frame = ttk.LabelFrame(analysis_tab, text="Select Figures to Display (for Single Dam Analysis)")
-analysis_figure_frame.pack(pady=10, padx=10, fill=tk.X, side=tk.TOP)  # Pack at the top
+analysis_figure_frame.pack(pady=10, padx=10, fill=tk.X, side=tk.TOP)
 analysis_figure_frame.columnconfigure(0, weight=1)
 analysis_figure_frame.columnconfigure(1, weight=1)
-analysis_display_cross_section = tk.BooleanVar(value=True)
+analysis_display_cross_section = tk.BooleanVar(value=False)
 ttk.Checkbutton(analysis_figure_frame, text="Cross-Sections", variable=analysis_display_cross_section).grid(row=0,
                                                                                                             column=0,
                                                                                                             padx=5,
                                                                                                             pady=2,
                                                                                                             sticky=tk.W)
-analysis_display_rating_curves = tk.BooleanVar(value=True)
+analysis_display_rating_curves = tk.BooleanVar(value=False)
 ttk.Checkbutton(analysis_figure_frame, text="Rating Curves", variable=analysis_display_rating_curves).grid(row=1,
                                                                                                            column=0,
                                                                                                            padx=5,
                                                                                                            pady=2,
                                                                                                            sticky=tk.W)
-analysis_display_map = tk.BooleanVar(value=True)
+analysis_display_map = tk.BooleanVar(value=False)
 ttk.Checkbutton(analysis_figure_frame, text="Dam Location", variable=analysis_display_map).grid(row=2, column=0, padx=5,
                                                                                                 pady=2, sticky=tk.W)
-analysis_display_wsp = tk.BooleanVar(value=True)
+analysis_display_wsp = tk.BooleanVar(value=False)
 ttk.Checkbutton(analysis_figure_frame, text="Water Surface Profile", variable=analysis_display_wsp).grid(row=0,
                                                                                                          column=1,
                                                                                                          padx=5, pady=2,
                                                                                                          sticky=tk.W)
-analysis_display_fdc = tk.BooleanVar(value=True)
+analysis_display_fdc = tk.BooleanVar(value=False)
 ttk.Checkbutton(analysis_figure_frame, text="Flow-Duration Curve", variable=analysis_display_fdc).grid(row=1, column=1,
                                                                                                        padx=5, pady=2,
                                                                                                        sticky=tk.W)
 
-# --- Analysis: Run Buttons ---
-analysis_button_frame = ttk.Frame(analysis_tab)
-analysis_button_frame.pack(pady=20, fill=tk.X, padx=10, side=tk.TOP)  # Pack at the top
-analysis_button_frame.columnconfigure(0, weight=1)
-analysis_button_frame.columnconfigure(1, weight=1)
-analysis_run_button = ttk.Button(analysis_button_frame, text="Process ARC Data", command=start_analysis_processing)
-analysis_run_button.grid(row=0, column=0, padx=5, ipady=5, sticky=tk.EW)
-analysis_summary_button = ttk.Button(analysis_button_frame, text="Create Summary Figures",
-                                     command=start_summary_plotting)
-analysis_summary_button.grid(row=0, column=1, padx=5, ipady=5, sticky=tk.EW)
+# --- Analysis: NEW Display Button ---
+analysis_display_button_frame = ttk.Frame(analysis_tab)
+analysis_display_button_frame.pack(pady=10, fill=tk.X, padx=10, side=tk.TOP)
+analysis_display_button = ttk.Button(analysis_display_button_frame, text="Generate & Display Dam Figures",
+                                     command=start_display_dam_figures_thread, style="Accent.TButton")
+analysis_display_button.pack(fill=tk.X, ipady=5)
+
 
 # --- Analysis: NEW Figure Viewer Frame ---
 analysis_figure_viewer_frame = ttk.LabelFrame(analysis_tab, text="Figure Viewer")
-analysis_figure_viewer_frame.pack(fill="both", expand=True, padx=10, pady=10)
+# This frame is packed at the end, but its content is filled by functions
 
-# This frame will hold the matplotlib canvas
-analysis_figure_canvas_frame = ttk.Frame(analysis_figure_viewer_frame)
-analysis_figure_canvas_frame.pack(fill="both", expand=True)
-
-# This frame will hold the controls (buttons, label)
+# This frame will hold the controls (buttons, label) - PACKED FIRST
 analysis_figure_controls_frame = ttk.Frame(analysis_figure_viewer_frame)
-analysis_figure_controls_frame.pack(fill="x", pady=5)
+analysis_figure_controls_frame.pack(fill="x", pady=5, side=tk.TOP) # Explicitly pack at the top
 
 prev_button = ttk.Button(analysis_figure_controls_frame, text="< Previous", command=on_prev_figure)
 prev_button.pack(side=tk.LEFT, padx=10)
@@ -1029,6 +1170,12 @@ analysis_figure_label = ttk.Label(analysis_figure_controls_frame, textvariable=a
                                   anchor=tk.CENTER)
 analysis_figure_label.pack(side=tk.LEFT, fill="x", expand=True)
 
+# This frame will hold the matplotlib canvas - PACKED SECOND
+analysis_figure_canvas_frame = ttk.Frame(analysis_figure_viewer_frame)
+analysis_figure_canvas_frame.pack(fill="both", expand=True)
+
+# Pack the main viewer frame (it will be un-packed by clear_figure_carousel)
+analysis_figure_viewer_frame.pack(fill="both", expand=True, padx=10, pady=10)
 # Hide the figure viewer frame initially
 analysis_figure_viewer_frame.pack_forget()
 

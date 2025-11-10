@@ -381,7 +381,6 @@ def process_ARC():
                         xs.create_combined_fdc()  # Saves the fig
                     dam_i.plot_map()  # Saves the fig
                     dam_i.plot_water_surface()  # Saves the fig
-                    print("Onto the next one! :)")
 
             else:  # --- Logic for a single dam ---
                 status_var.set(f"Processing single Dam {selected_dam}...")

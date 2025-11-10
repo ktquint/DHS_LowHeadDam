@@ -676,10 +676,9 @@ class Dam:
         fig.savefig(plt_loc)
         return fig
 
-
     def plot_water_surface(self):
-        cf_csv = os.path.join(self.results_dir,  str(self.id), "VDT", f"{self.id}_CurveFile.csv")
-        xs_txt = os.path.join(self.results_dir,  str(self.id), "XS", f"{self.id}_XS_Out.txt")
+        cf_csv = os.path.join(self.results_dir, str(self.id), "VDT", f"{self.id}_CurveFile.csv")
+        xs_txt = os.path.join(self.results_dir, str(self.id), "XS", f"{self.id}_XS_Out.txt")
 
         database_df = merge_databases(cf_csv, xs_txt)
 
@@ -693,9 +692,13 @@ class Dam:
         upstream_col = upstream_xs['Col']
 
         upstream_idx = database_df[(database_df['Row'] == upstream_row)
-                                    & (database_df['Col'] == upstream_col)].index[0]
+                                   & (database_df['Col'] == upstream_col)].index[0]
 
-        ax.scatter(upstream_idx, upstream_xs['DEM_Elev'], label=f'Upstream Elevation')
+        # List to hold all XS indices for setting x-limits
+        all_xs_indices = [upstream_idx]
+
+        # --- MODIFICATION: Changed scatter to axvline ---
+        ax.axvline(x=upstream_idx, color='red', linestyle='--', label=f'Upstream Cross-Section')
 
         for i in range(1, len(self.dam_gdf)):
             downstream_xs = self.dam_gdf.iloc[i]
@@ -707,9 +710,17 @@ class Dam:
                 (database_df["Col"] == downstream_col)
                 ].index[0]
 
-            ax.scatter(downstream_idx,
-                       downstream_xs['DEM_Elev'],
-                       label=f'Downstream Elevation No. {i}')
+            all_xs_indices.append(downstream_idx)
+
+            # --- MODIFICATION: Changed scatter to vertical line ---
+            # Only add one label for all downstream XSs
+            label = 'Downstream Cross-Sections' if i == 1 else ""
+            ax.axvline(x=downstream_idx, color='cyan', linestyle='--', label=label)
+
+        if all_xs_indices:
+            min_lim = min(all_xs_indices) - 10  # 10m before first XS
+            max_lim = max(all_xs_indices) + 10  # 10m after last XS
+            ax.set_xlim(min_lim, max_lim)
 
         ax.legend()
         ax.set_xlabel("Distance Downstream (m)")
@@ -717,5 +728,3 @@ class Dam:
         ax.set_title(f"Water Surface Profile for LHD No. {self.id}")
         fig.tight_layout()
         return fig
-
-
