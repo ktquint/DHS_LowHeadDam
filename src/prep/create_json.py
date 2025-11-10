@@ -31,6 +31,11 @@ def rathcelon_input(lhd_csv, output_loc, hydrography, hydrology):
         else:
             known_baseflow = row['dem_baseflow_NWM']
 
+        # Check if known_baseflow is a string or NaN (which is not valid JSON)
+        # and convert it to None (which becomes 'null' in JSON)
+        if isinstance(known_baseflow, str) or pd.isna(known_baseflow):
+            known_baseflow = None
+
         dam_dict = {"name": name,
                     "dam_csv": dam_csv,
                     "dam_id_field": dam_id_field,

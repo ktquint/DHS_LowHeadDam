@@ -197,20 +197,23 @@ class StreamReach:
         """More efficient method to get flow on a specific date, returning reasons for failure."""
         df = self._get_source_df(source)
         if df is None or df.empty:
-            return f"No data available for source: {source}"  # Reason 1: No data loaded for the source
+            print(f"Dam {self.id}: No data available for source: {source}")
+            return np.nan
 
         # Convert target_date to datetime.date for comparison
         try:
             target_dt = pd.to_datetime(target_date).date()
         except ValueError:
-            return "Invalid target date format"  # Reason 2: Date couldn't be parsed
+            print(f"Dam {self.id}: Invalid target date format for {target_date}")
+            return np.nan
 
         # Check if the date is within the range of the DataFrame index
         min_date = df.index.min().date()
         max_date = df.index.max().date()
 
         if not (min_date <= target_dt <= max_date):
-            return f"Date out of range ({min_date} to {max_date})"  # Reason 3: Date outside available data range
+            print(f"Dam {self.id}: Date {target_dt} out of range ({min_date} to {max_date})")
+            return np.nan
 
         # Look for the specific date
         match = df[df.index.date == target_dt]
@@ -221,11 +224,13 @@ class StreamReach:
             if pd.notna(flow_value):
                 return float(flow_value)  # Success! Return the flow
             else:
-                return "Data exists, but flow value is missing (NaN)"  # Reason 4: Date found, but value is NaN
+                print(f"Dam {self.id}: Data exists for {target_dt}, but flow value is missing (NaN)")
+                return np.nan
         else:
             # This case might be less common if the date range check passes,
             # but could happen if there are gaps in daily data within the range.
-            return "No data found for this specific date within the range"  # Reason 5: Date in range, but no specific row
+            print(f"Dam {self.id}: No data found for specific date {target_dt} within the range")
+            return np.nan
 
     def get_median_flow(self, source: str) -> float:
         """

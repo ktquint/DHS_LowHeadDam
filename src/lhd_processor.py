@@ -1107,7 +1107,7 @@ analysis_button_frame = ttk.Frame(analysis_tab)
 analysis_button_frame.pack(pady=10, fill=tk.X, padx=10, side=tk.TOP)
 analysis_button_frame.columnconfigure(0, weight=1)
 analysis_button_frame.columnconfigure(1, weight=1)
-analysis_run_button = ttk.Button(analysis_button_frame, text="Process & Save Dam Data", command=start_analysis_processing)
+analysis_run_button = ttk.Button(analysis_button_frame, text="4. Analyze & Save Dam Data", command=start_analysis_processing)
 analysis_run_button.grid(row=0, column=0, padx=5, ipady=5, sticky=tk.EW)
 analysis_summary_button = ttk.Button(analysis_button_frame, text="Generate Bar Chart", # NEW BUTTON
                                      command=start_summary_plotting)
@@ -1146,7 +1146,7 @@ ttk.Checkbutton(analysis_figure_frame, text="Flow-Duration Curve", variable=anal
 # --- Analysis: NEW Display Button ---
 analysis_display_button_frame = ttk.Frame(analysis_tab)
 analysis_display_button_frame.pack(pady=10, fill=tk.X, padx=10, side=tk.TOP)
-analysis_display_button = ttk.Button(analysis_display_button_frame, text="Generate & Display Dam Figures",
+analysis_display_button = ttk.Button(analysis_display_button_frame, text="5. Generate & Display Dam Figures",
                                      command=start_display_dam_figures_thread, style="Accent.TButton")
 analysis_display_button.pack(fill=tk.X, ipady=5)
 
