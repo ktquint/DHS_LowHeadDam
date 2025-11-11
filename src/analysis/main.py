@@ -189,7 +189,7 @@ def plot_shj_estimates():
                 ax.set_ylabel('Depth (ft)')
                 ax.grid(True, axis='y', linestyle='--', alpha=0.5)
                 ax.set_title(f"Summary of Results from Cross-Section No. {i}")
-                # fig.savefig(f'./Summary of Results from Cross-Section No. {i}.png')
+                fig.savefig(f'./Summary of Results from Cross-Section No. {i}.png')
                 fig.tight_layout()
 
                 fig_canvas = FigureCanvasTkAgg(fig, master=scroll_frame)

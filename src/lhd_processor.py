@@ -616,7 +616,7 @@ def threaded_process_ARC():
                 try:  # <--- START OF ERROR HANDLING
                     status_var.set(f"Analyzing Dam {dam_id} ({i + 1} of {total_dams})...")
                     print(f"Analyzing Dam No. {dam_id}")
-                    dam_i = AnalysisDam(int(dam_id), database_csv, selected_model, estimate_dam)
+                    dam_i = AnalysisDam(int(dam_id), database_csv, selected_model, estimate_dam, results_dir)
 
                     # When "All Dams" is selected, just save figs
                     for xs in dam_i.cross_sections:
@@ -653,7 +653,7 @@ def threaded_process_ARC():
         else:  # --- Logic for a single dam ---
             try:  # <--- START OF ERROR HANDLING
                 status_var.set(f"Processing single Dam {selected_dam}...")
-                dam_i = AnalysisDam(int(selected_dam), database_csv, selected_model, estimate_dam)
+                dam_i = AnalysisDam(int(selected_dam), database_csv, selected_model, estimate_dam, results_dir)
 
                 # Just save the figures, do not display
                 for xs in dam_i.cross_sections:
@@ -724,7 +724,7 @@ def threaded_display_dam_figures():
 
         # --- Logic for a single dam ---
         status_var.set(f"Loading Dam {selected_dam} for display...")
-        dam_i = AnalysisDam(int(selected_dam), database_csv, selected_model, estimate_dam)
+        dam_i = AnalysisDam(int(selected_dam), database_csv, selected_model, estimate_dam, results_dir)
 
         if analysis_display_cross_section.get():
             for xs in dam_i.cross_sections:

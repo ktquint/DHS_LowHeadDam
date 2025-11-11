@@ -190,7 +190,7 @@ def plot_rating_curves(curve_file, output_dir):
     plt.show()
 
 
-def plot_water_profiles(combined_gdf: gpd.GeoDataFrame, full_database_df: pd.DataFrame, output_dir: str=None, save: bool=False):
+def plot_water_profiles(combined_gdf: gpd.GeoDataFrame, full_database_df: pd.DataFrame, output_dir: str=None, save: bool=True):
     plt.plot(full_database_df.index, full_database_df['DEM_Elev'], color='dodgerblue', label='DEM Elevation')
     upstream_xs = combined_gdf.iloc[0]
     upstream_row = upstream_xs['Row']

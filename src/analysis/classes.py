@@ -422,7 +422,7 @@ class Dam:
     create a Dam based on the BYU LHD IDs
     add cross-sections with information from vdt & cross_section files
     """
-    def __init__(self, lhd_id, lhd_csv, hydrology, est_dam):
+    def __init__(self, lhd_id, lhd_csv, hydrology, est_dam, base_results_dir):
         #database information
         self.id = int(lhd_id)
         self.hydrology = hydrology
@@ -432,7 +432,7 @@ class Dam:
         id_row = lhd_df[lhd_df['ID'] == self.id].reset_index(drop=True)
 
         # create a folder to store figures...
-        self.results_dir = id_row['output_dir'].values[0]
+        self.results_dir = base_results_dir
         self.fig_dir = os.path.join(self.results_dir, str(self.id), "FIGS")
         os.makedirs(self.fig_dir, exist_ok=True)
 
@@ -561,7 +561,7 @@ class Dam:
             lhd_df.loc[lhd_df['ID'] == self.id, f'y_2_{i}'] = y_2s_string
 
         # update the csv file
-        lhd_df.to_csv(lhd_csv, index=False)
+        # lhd_df.to_csv(lhd_csv, index=False)
 
 
     def plot_rating_curves(self):
