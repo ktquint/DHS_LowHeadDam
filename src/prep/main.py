@@ -185,7 +185,7 @@ def create_input_file():
                 dam.assign_hydrography(hydrography)
 
                 status_var.set(f"Dam {dam_id}: Assigning flowlines...")
-                dam.assign_flowlines(strm_folder)
+                dam.assign_flowlines(strm_folder, "")
 
                 status_var.set(f"Dam {dam_id}: Assigning DEM...")
                 # This call now works, because dem_folder is the base results path.

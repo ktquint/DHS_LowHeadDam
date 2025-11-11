@@ -1,6 +1,7 @@
 import os
 import ast
 import json
+import requests
 import threading
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
@@ -229,7 +230,50 @@ def threaded_prepare_data():
                 dam.assign_hydrography(hydrography)
 
                 status_var.set(f"Dam {dam_id}: Assigning flowlines...")
-                dam.assign_flowlines(strm_folder)
+
+                # --- Find the VPU map file (and download if missing) ---
+                # 1. Get the main project folder path from the GUI
+                project_path = prep_project_entry.get()
+
+                # 2. Define the path to the data folder and the VPU map file
+                data_folder = os.path.join(project_path, "VPU")
+                tdx_vpu_map_path = os.path.join(data_folder, "vpu_boundaries.gpkg")
+                vpu_map_url = "http://geoglows-v2.s3-us-west-2.amazonaws.com/hydrography-global/vpu-boundaries.gpkg"
+
+                if hydrography == 'GEOGLOWS':
+                    if not os.path.exists(tdx_vpu_map_path):
+                        # File is missing, let's download it.
+                        try:
+                            # Inform the user this is a one-time download
+                            messagebox.showinfo("Downloading Data",
+                                                "The GEOGLOWS VPU map file is missing.\n"
+                                                "The program will now download it (one-time, ~2 GB).\n"
+                                                "This may take a moment.")
+                            status_var.set("Downloading vpu_boundaries.gpkg...")
+
+                            # Ensure the 'data' directory exists
+                            os.makedirs(data_folder, exist_ok=True)
+
+                            # Download the file
+                            with requests.get(vpu_map_url, stream=True) as r:
+                                r.raise_for_status()  # Check for download errors
+                                with open(tdx_vpu_map_path, 'wb') as f:
+                                    for chunk in r.iter_content(chunk_size=8192):
+                                        f.write(chunk)
+
+                            status_var.set("VPU map download complete.")
+
+                        except Exception as e:
+                            messagebox.showerror("Download Failed",
+                                                 f"Failed to automatically download the VPU map file from:\n{vpu_map_url}\n\n"
+                                                 f"Error: {e}\n\n"
+                                                 "Please download the file manually and place it in the 'data' folder "
+                                                 "of your project, then try again.")
+                            continue  # Skips this dam
+
+                # 'strm_folder' is the LHD_STRMs path (where NHD/VPU downloads go)
+                # 'tdx_vpu_map_path' is the path to our map file (it either existed or was just downloaded)
+                dam.assign_flowlines(strm_folder, tdx_vpu_map_path)
 
                 status_var.set(f"Dam {dam_id}: Assigning DEM...")
                 dam.assign_dem(dem_folder, dem_resolution)

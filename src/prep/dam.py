@@ -58,7 +58,7 @@ class Dam:
         self.fatality_flows_GEOGLOWS = kwargs.get('fatality_flows_GEOGLOWS', None)
 
 
-    def assign_flowlines(self, flowline_dir: str, TDX_full: str="E:/TDX_HYDRO/streams.gpkg"):
+    def assign_flowlines(self, flowline_dir: str, VPU_gpkg: str):
         # download the flowlines based on the provided source
         print(f"Assigning flowlines based on {self.hydrography}")
 
@@ -66,7 +66,7 @@ class Dam:
             self.flowline_NHD = download_NHDPlus(self.latitude, self.longitude, flowline_dir)
 
         elif self.hydrography == 'GEOGLOWS':
-            self.flowline_TDX = download_TDXHYDRO(self.latitude, self.longitude, flowline_dir, TDX_full)
+            self.flowline_TDX = download_TDXHYDRO(self.latitude, self.longitude, flowline_dir, VPU_gpkg)
 
     def assign_dem(self, dem_dir, resolution):
         # Call download_dem, which now returns resolution_meters

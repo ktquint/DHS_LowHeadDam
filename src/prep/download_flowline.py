@@ -5,7 +5,7 @@ import zipfile
 import requests
 import pandas as pd
 import geopandas as gpd
-from shapely.geometry import box, Point
+from shapely.geometry import Point
 from .download_dem import sanitize_filename
 from math import radians, sin, cos, sqrt, atan2
 
@@ -197,44 +197,84 @@ def download_NHDPlus(latitude: float, longitude: float, flowline_dir: str) -> st
         return None
 
 
-def download_TDXHYDRO(latitude: float, longitude: float, flowline_dir: str, TDX_full: str) -> str:
+def download_TDXHYDRO(latitude: float, longitude: float, flowline_dir: str, vpu_map_path: str) -> str:
     """
-        Downloads the GeoGLows GPKGs locally.
+    Finds the correct VPU code for a lat/lon by reading the vpu_map_path file,
+    then downloads the individual VPU .gpkg file from S3 if it doesn't
+    already exist in flowline_dir.
+
+    This functions just like the NHDPlus download workflow.
     """
-    # first we need to find the linkno based on the closest streamline
-    # we'll use a bounding box so we don't have to load the whole thing
-    base_url = 'geoglows-v2/hydrography/'
+    print(f"Identifying VPU for dam at {latitude}, {longitude}...")
 
-    bbox_coords = make_bbox(latitude, longitude, 0.003)
-    bbox_geom = box(*bbox_coords)
-    gdf = gpd.read_file(TDX_full, bbox=bbox_geom)
-    print("finished reading in the geoglows streamlines")
-    dam_point = Point(latitude, longitude)
+    # 1. Read the VPU Boundaries map file (vpu_boundaries.gpkg)
+    try:
+        vpu_gdf = gpd.read_file(vpu_map_path)
+    except Exception as e:
+        print(f"CRITICAL ERROR: Could not read the VPU boundaries file at {vpu_map_path}")
+        print(f"Error: {e}")
+        return None  # This will be caught by prep/dam.py
 
-    # find the nearest streamline to our dam
-    gdf["distance"] = gdf.geometry.distance(dam_point)
-    nearest = gdf.loc[gdf["distance"].idxmin()]
+    dam_point = Point(longitude, latitude)  # Note: (lon, lat) for shapely
 
-    # save the comid
-    vpu_code = nearest["VPUCode"]
+    # 2. Find which VPU polygon contains the dam point
+    # Ensure VPU map is in the same CRS (EPSG:4326) as the point
+    if vpu_gdf.crs.to_epsg() != 4326:
+        vpu_gdf = vpu_gdf.to_crs(epsg=4326)
 
+    vpu_polygon = vpu_gdf[vpu_gdf.contains(dam_point)]
+
+    if vpu_polygon.empty:
+        print(f"No VPU boundary polygon found for point {longitude}, {latitude}")
+        print("Dam is likely outside the VPU boundaries.")
+        return None  # This will be caught by prep/dam.py
+
+    # 3. Get the VPU code from that polygon (NEW, MORE ROBUST LOGIC)
+    try:
+        # Create a lowercase-to-original-case mapping of columns
+        cols_lower = {col.lower(): col for col in vpu_polygon.columns}
+
+        if 'vpu' in cols_lower:
+            vpu_col_name = cols_lower['vpu']
+        elif 'vpucode' in cols_lower:
+            vpu_col_name = cols_lower['vpucode']
+        else:
+            # If we can't find a match, raise an error
+            raise KeyError("Could not find a VPU column ('VPU', 'vpu', or 'VPUCode')")
+
+        vpu_code = str(vpu_polygon.iloc[0][vpu_col_name])
+        print(f"VPU identified: {vpu_code}")
+
+    except KeyError as e:
+        print(f"ERROR: {e}")
+        print(f"Could not find a VPU ID column in {vpu_map_path}")
+        print(f"Available columns are: {vpu_gdf.columns.to_list()}")
+        return None  # This will be caught by prep/dam.py
+
+    # 4. Create the path to where the individual VPU file *should* be
+    os.makedirs(flowline_dir, exist_ok=True)  # Make sure the LHD_STRMs dir exists
     gpkg_loc = os.path.join(flowline_dir, f"streams_{vpu_code}.gpkg")
-    gpkg_name = gpkg_loc.split("\\")[-1]
-    vpu_id = gpkg_name[-8:-5]
-    gpkg_url = f"{base_url}vpu={vpu_id}/{gpkg_name}"
 
-    if not os.path.exists(gpkg_loc):
-        try:
-            fs = s3fs.S3FileSystem(anon=True)
-            # Download a file
-            with fs.open(gpkg_url, 'rb') as f_in:
-                with open(gpkg_loc, 'wb') as f_out:
-                    f_out.write(f_in.read())
-
-            return gpkg_loc
-
-        except requests.exceptions.RequestException as e:
-            print(f"Failed to download {gpkg_url}: {e}")
-    else:
-        print(f"Local file {gpkg_loc} already exists")
+    # 5. Check if we already downloaded it. If so, we're done.
+    if os.path.exists(gpkg_loc):
+        print(f"Local file {gpkg_loc} already exists. Using it.")
         return gpkg_loc
+
+    # 6. If it doesn't exist, download it from S3
+    print(f"Local file not found. Downloading {gpkg_loc}...")
+    base_url = 'geoglows-v2/hydrography/'
+    gpkg_name = f"streams_{vpu_code}.gpkg"
+    gpkg_url = f"{base_url}vpu={vpu_code}/{gpkg_name}"
+
+    try:
+        fs = s3fs.S3FileSystem(anon=True)
+        with fs.open(gpkg_url, 'rb') as f_in:
+            with open(gpkg_loc, 'wb') as f_out:
+                f_out.write(f_in.read())
+        print(f"Successfully downloaded {gpkg_loc}")
+    except Exception as e:
+        print(f"Failed to download {gpkg_url}: {e}")
+        return None  # This will be caught by prep/dam.py
+
+    # 7. Return the path to the newly downloaded file
+    return gpkg_loc
