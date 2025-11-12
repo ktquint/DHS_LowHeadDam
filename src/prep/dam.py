@@ -9,11 +9,11 @@ from .download_flowline import download_NHDPlus, download_TDXHYDRO
 
 class Dam:
     """
-        Dam object created from a row of a .xlsx workbook
+        Dam object created from a row of a .csv file
     """
     def __init__(self, **kwargs):
         """
-            kwargs will be a .xlsx row turned into a dictionary
+            kwargs will be a .csv row turned into a dictionary
         """
         # database info
         self.ID = kwargs['ID']

@@ -40,12 +40,13 @@ except ImportError:
                          "Please ensure it is installed in your Python environment.")
     exit()
 
+"""
+===================================================================
 
-# ===================================================================
-#
-# TAB 1: PREPARATION & PROCESSING FUNCTIONS
-#
-# ===================================================================
+           TAB 1: PREPARATION & PROCESSING FUNCTIONS
+
+===================================================================
+"""
 
 def select_prep_project_dir():
     """Selects the main project directory and auto-populates all paths for Tab 1."""
@@ -58,12 +59,12 @@ def select_prep_project_dir():
 
     try:
         # Find the .xlsx database
-        excel_files = [f for f in os.listdir(project_path) if f.endswith('.xlsx')]
-        if not excel_files:
-            messagebox.showwarning("No Database", f"No .xlsx database file found in:\n{project_path}")
+        csv_files = [f for f in os.listdir(project_path) if f.endswith('.csv')]
+        if not csv_files:
+            messagebox.showwarning("No Database", f"No .csv database file found in:\n{project_path}")
             return
 
-        database_path = os.path.join(project_path, excel_files[0])
+        database_path = os.path.join(project_path, csv_files[0])
         prep_database_entry.delete(0, tk.END)
         prep_database_entry.insert(0, database_path)
 
@@ -86,25 +87,19 @@ def select_prep_project_dir():
         rathcelon_json_entry.delete(0, tk.END)
         rathcelon_json_entry.insert(0, json_path)
 
-        prep_csv_entry.delete(0, tk.END)
-        prep_csv_entry.insert(0, os.path.splitext(database_path)[0] + '.csv')
-
         status_var.set("Project paths loaded.")
 
     except IndexError:
-        messagebox.showerror("Error", f"No .xlsx database file found in:\n{project_path}")
+        messagebox.showerror("Error", f"No .csv database file found in:\n{project_path}")
     except Exception as e:
         messagebox.showerror("Error", f"Failed to load project paths: {e}")
 
 
 def select_prep_database_file():
-    file_path = filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx")])
+    file_path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
     if file_path:
         prep_database_entry.delete(0, tk.END)
         prep_database_entry.insert(0, file_path)
-
-        prep_csv_entry.delete(0, tk.END)
-        prep_csv_entry.insert(0, os.path.splitext(file_path)[0] + '.csv')
 
         prep_json_entry.delete(0, tk.END)
         prep_json_entry.insert(0, os.path.splitext(file_path)[0] + '.json')
@@ -146,34 +141,26 @@ def select_rathcelon_json_file():
         rathcelon_json_entry.insert(0, json_path)
 
 
-def select_prep_csv_file():
-    csv_path = filedialog.asksaveasfilename(filetypes=[("CSV files", "*.csv")], defaultextension=".csv")
-    if csv_path:
-        prep_csv_entry.delete(0, tk.END)
-        prep_csv_entry.insert(0, csv_path)
-
-
 def threaded_prepare_data():
     """
     This function now prepares data and creates the input files.
     """
     try:
         # --- 1. Get all values from GUI ---
-        lhd_xlsx = prep_database_entry.get()
+        lhd_csv = prep_database_entry.get()
         hydrography = prep_hydro_var.get()
         dem_resolution = prep_dd_var.get()
         hydrology = prep_logy_var.get()
         dem_folder = prep_dem_entry.get()
         strm_folder = prep_strm_entry.get()
         results_folder = prep_results_entry.get()
-        lhd_csv = prep_csv_entry.get()
 
         # --- 2. Validate inputs ---
-        if not os.path.exists(lhd_xlsx):
-            messagebox.showerror("Error", f"Database file not found:\n{lhd_xlsx}")
+        if not os.path.exists(lhd_csv):
+            messagebox.showerror("Error", f"Database file not found:\n{lhd_csv}")
             return
         if not all(
-                [lhd_xlsx, hydrography, dem_resolution, hydrology, dem_folder, strm_folder, results_folder, lhd_csv]):
+                [lhd_csv, hydrography, dem_resolution, hydrology, dem_folder, strm_folder, results_folder]):
             messagebox.showwarning("Missing Info", "Please fill out all path and setting fields.")
             return
 
@@ -184,7 +171,7 @@ def threaded_prepare_data():
         os.makedirs(strm_folder, exist_ok=True)
         os.makedirs(results_folder, exist_ok=True)
 
-        lhd_df = pd.read_excel(lhd_xlsx)
+        lhd_df = pd.read_csv(lhd_csv)
         final_df = lhd_df.copy()
 
         # We just use the first row as an example to get the attribute names
@@ -331,9 +318,8 @@ def threaded_prepare_data():
 
         # --- 6. Final Output Generation (CSV/Excel/JSON) ---
         if processed_dams_count > 0:
-            status_var.set("Saving updated database files...")
+            status_var.set("Saving updated database file...")
             final_df.to_csv(lhd_csv, index=False)
-            final_df.to_excel(lhd_xlsx, index=False)
 
             status_var.set("Creating rathcelon_input.json...")
             json_loc = prep_json_entry.get()
@@ -423,12 +409,13 @@ def start_rathcelon_run_thread():
     threading.Thread(target=threaded_run_rathcelon, daemon=True).start()
 
 
-# ===================================================================
-#
-# TAB 2: ANALYSIS & VISUALIZATION FUNCTIONS
-# (All functions from here down are for the Analysis tab)
-#
-# ===================================================================
+"""
+===================================================================
+
+            TAB 2: ANALYSIS & VISUALIZATION FUNCTIONS
+
+===================================================================
+"""
 
 # --- Global variables for figure carousel ---
 current_figure_list = []
@@ -657,7 +644,7 @@ def threaded_process_ARC():
             dam_ints = sorted(dams_int)
             total_dams = len(dam_ints)
             for i, dam_id in enumerate(dam_ints):
-                try:  # <--- START OF ERROR HANDLING
+                try:
                     status_var.set(f"Analyzing Dam {dam_id} ({i + 1} of {total_dams})...")
                     print(f"Analyzing Dam No. {dam_id}")
                     dam_i = AnalysisDam(int(dam_id), database_csv, selected_model, estimate_dam, results_dir)
@@ -692,7 +679,6 @@ def threaded_process_ARC():
                     print(f"---" * 20)
                     status_var.set(f"Error on Dam {dam_id}. Skipping.")
                     continue
-                # <--- END OF ERROR HANDLING
 
         else:  # --- Logic for a single dam ---
             try:  # <--- START OF ERROR HANDLING
@@ -709,7 +695,7 @@ def threaded_process_ARC():
                 plt.close(dam_i.plot_water_surface())
                 print(f"Finished processing and saving figures for Dam {selected_dam}.")
 
-            except ValueError as e:  # <--- ADDED ERROR HANDLING
+            except ValueError as e:
                 if "Invalid flow conditions" in str(e):
                     print(f"---" * 20)
                     print(f"ERROR on Dam {selected_dam}: {e}")
@@ -975,16 +961,17 @@ def start_summary_plotting():
     status_var.set("Starting summary bar chart generation...")
     threading.Thread(target=threaded_plot_shj, daemon=True).start()
 
+"""
+===================================================================
 
-# ===================================================================
-#
-# MAIN APPLICATION GUI SETUP
-#
-# ===================================================================
+                    MAIN APPLICATION GUI SETUP
+                
+===================================================================
+"""
 
 root = tk.Tk()
 root.title("LHD Control Center")
-root.geometry("700x900")  # Increased height for figure viewer
+root.geometry("700x1000")
 
 # --- Style ---
 style = ttk.Style()
@@ -1000,9 +987,11 @@ notebook.add(prep_tab, text="  Preparation & Processing  ")
 notebook.add(analysis_tab, text="  Analysis & Visualization  ")
 notebook.pack(expand=True, fill="both", padx=10, pady=10)
 
-# ===================================================================
-# --- GUI: PREPARATION TAB ---
-# ===================================================================
+"""
+===================================================================
+                --- GUI: PREPARATION TAB ---
+===================================================================
+"""
 
 # --- Frame for Step 1: Data Preparation ---
 prep_data_frame = ttk.LabelFrame(prep_tab, text="Step 1: Prepare Data and Create Input File")
@@ -1022,11 +1011,10 @@ prep_project_entry.grid(row=0, column=1, padx=5, pady=5, sticky=tk.EW)
 prep_database_frame = ttk.Frame(prep_data_frame)
 prep_database_frame.pack(pady=5, padx=10, fill=tk.X)
 prep_database_frame.columnconfigure(1, weight=1)
-ttk.Button(prep_database_frame, text="Select Database File (.xlsx)", command=select_prep_database_file).grid(row=0,
-                                                                                                             column=0,
-                                                                                                             padx=5,
-                                                                                                             pady=5,
-                                                                                                             sticky=tk.W)
+ttk.Button(prep_database_frame, text="Select Database File (.csv)",
+           command=select_prep_database_file).grid(row=0, column=0,
+                                                   padx=5, pady=5,
+                                                   sticky=tk.W)
 prep_database_entry = ttk.Entry(prep_database_frame)
 prep_database_entry.grid(row=0, column=1, padx=5, pady=5, sticky=tk.EW)
 
@@ -1034,31 +1022,35 @@ prep_database_entry.grid(row=0, column=1, padx=5, pady=5, sticky=tk.EW)
 prep_results_frame = ttk.Frame(prep_data_frame)
 prep_results_frame.pack(pady=5, padx=10, fill=tk.X)
 prep_results_frame.columnconfigure(1, weight=1)
-ttk.Button(prep_results_frame, text="Select DEM Folder", command=select_prep_dem_dir).grid(row=0, column=0, padx=5,
-                                                                                           pady=5, sticky=tk.W)
+# dem folder
+ttk.Button(prep_results_frame, text="Select DEM Folder",
+           command=select_prep_dem_dir).grid(row=0, column=0,
+                                             padx=5, pady=5,
+                                             sticky=tk.W)
 prep_dem_entry = ttk.Entry(prep_results_frame)
 prep_dem_entry.grid(row=0, column=1, padx=5, pady=5, sticky=tk.EW)
-ttk.Button(prep_results_frame, text="Select Hydrography Folder", command=select_prep_strm_dir).grid(row=1, column=0,
-                                                                                                    padx=5, pady=5,
-                                                                                                    sticky=tk.W)
+# hydrography folder
+ttk.Button(prep_results_frame, text="Select Hydrography Folder",
+           command=select_prep_strm_dir).grid(row=1, column=0,
+                                              padx=5, pady=5,
+                                              sticky=tk.W)
 prep_strm_entry = ttk.Entry(prep_results_frame)
 prep_strm_entry.grid(row=1, column=1, padx=5, pady=5, sticky=tk.EW)
-ttk.Button(prep_results_frame, text="Select Results Folder", command=select_prep_results_dir).grid(row=2, column=0,
-                                                                                                   padx=5, pady=5,
-                                                                                                   sticky=tk.W)
+# results folder
+ttk.Button(prep_results_frame, text="Select Results Folder",
+           command=select_prep_results_dir).grid(row=2, column=0,
+                                                 padx=5, pady=5,
+                                                 sticky=tk.W)
 prep_results_entry = ttk.Entry(prep_results_frame)
 prep_results_entry.grid(row=2, column=1, padx=5, pady=5, sticky=tk.EW)
-ttk.Button(prep_results_frame, text="RathCelon Input File (.json)", command=select_prep_json_file).grid(row=3, column=0,
-                                                                                                        padx=5, pady=5,
-                                                                                                        sticky=tk.W)
+# RathCelon .json input
+ttk.Button(prep_results_frame, text="RathCelon Input File (.json)",
+           command=select_prep_json_file).grid(row=3, column=0,
+                                               padx=5, pady=5,
+                                               sticky=tk.W)
 prep_json_entry = ttk.Entry(prep_results_frame)
 prep_json_entry.grid(row=3, column=1, padx=5, pady=5, sticky=tk.EW)
-ttk.Button(prep_results_frame, text="RathCelon Database File (.csv)", command=select_prep_csv_file).grid(row=4,
-                                                                                                         column=0,
-                                                                                                         padx=5, pady=5,
-                                                                                                         sticky=tk.W)
-prep_csv_entry = ttk.Entry(prep_results_frame)
-prep_csv_entry.grid(row=4, column=1, padx=5, pady=5, sticky=tk.EW)
+
 
 # --- Hydraulics and Hydrology Settings ---
 prep_hydro_frame = ttk.Frame(prep_data_frame)
@@ -1103,14 +1095,16 @@ ttk.Button(run_rathcelon_frame, text="Select Input File (.json)", command=select
 rathcelon_json_entry = ttk.Entry(run_rathcelon_frame)
 rathcelon_json_entry.grid(row=0, column=1, padx=5, pady=5, sticky=tk.EW)
 
-rathcelon_run_button = ttk.Button(run_rathcelon_frame, text="2. Run RathCelon Analysis",
+rathcelon_run_button = ttk.Button(run_rathcelon_frame, text="2. Run RathCelon",
                                   command=start_rathcelon_run_thread,
                                   style="Accent.TButton")
 rathcelon_run_button.grid(row=1, column=0, columnspan=2, padx=5, pady=10, sticky=tk.EW, ipady=5)
 
-# ===================================================================
-# --- GUI: ANALYSIS TAB --- (*** RE-ORDERED ***)
-# ===================================================================
+"""
+===================================================================
+                 --- GUI: ANALYSIS TAB ---
+===================================================================
+"""
 
 # --- Analysis: Database and Results Paths ---
 analysis_path_frame = ttk.LabelFrame(analysis_tab, text="Database and Results Paths")
@@ -1223,9 +1217,11 @@ analysis_figure_viewer_frame.pack(fill="both", expand=True, padx=10, pady=10)
 # Hide the figure viewer frame initially
 analysis_figure_viewer_frame.pack_forget()
 
-# ===================================================================
-# --- SHARED STATUS BAR ---
-# ===================================================================
+"""
+===================================================================
+                        --- STATUS BAR ---
+===================================================================
+"""
 status_var = tk.StringVar()
 status_var.set("Ready. Please select a Project Folder in the 'Preparation' tab to begin.")
 status_label = ttk.Label(root, textvariable=status_var, relief=tk.SUNKEN, anchor=tk.W, padding=5)

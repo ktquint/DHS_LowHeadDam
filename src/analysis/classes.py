@@ -471,20 +471,33 @@ class Dam:
 
         if hydrology == "GEOGLOWS":
             self.fatal_flows = ast.literal_eval(id_row.at[0, 'fatality_flows_GEOGLOWS'])
-            self.known_baseflow = id_row['dem_baseflow_GEOGLOWS'].values[0]
+            baseflow_val = id_row['dem_baseflow_GEOGLOWS'].values[0]
             # # establish which values to use as the comid
             # self.comid = id_row['LINKNO'].values[0]
 
         elif hydrology == "USGS":
             self.fatal_flows = ast.literal_eval(id_row.at[0, 'fatality_flows_USGS'])
-            self.known_baseflow = id_row['dem_baseflow_USGS'].values[0]
+            baseflow_val = id_row['dem_baseflow_USGS'].values[0]
             # flow_cfs = id_row['USGS_fatal_flows'].apply(ast.literal_eval).values[0]
             # self.fatal_flows = [Q / 35.315 for Q in flow_cfs]
 
         else:   # NWM
             self.fatal_flows = ast.literal_eval(id_row.at[0, 'fatality_flows_NWM'])
-            self.known_baseflow = id_row['dem_baseflow_NWM'].values[0]
+            baseflow_val = id_row['dem_baseflow_NWM'].values[0]
             # self.comid = id_row['reach_id'].values[0]
+
+        try:
+            self.known_baseflow = float(baseflow_val)
+            if pd.isna(self.known_baseflow):
+                raise ValueError("Baseflow is NaN")
+        except (ValueError, TypeError):
+            print(f"---" * 20)
+            print(f"CRITICAL ERROR on Dam {self.id}: Invalid or missing 'known_baseflow'.")
+            print(f"Value read from CSV: '{baseflow_val}' (Type: {type(baseflow_val)})")
+            print("This dam cannot be processed.")
+            print(f"---" * 20)
+            # Re-raise the error to be caught by lhd_processor.py
+            raise ValueError(f"Invalid baseflow value '{baseflow_val}' for Dam {self.id}")
 
 
         # ---------------------------------- READ IN VDT + CROSS-SECTION INFO ---------------------------------------- #
@@ -525,10 +538,12 @@ class Dam:
                 # z_i = -1 * self.cross_sections[i].slope * self.cross_sections[i].distance
                 # ths one has delta z = 0
 
-                P_i = hyd.dam_height(self.known_baseflow, self.weir_length, delta_wse_i, y_i) # , z_i)
-                if P_i < 1 or P_i > 100:
-                    P_i = 3.05 # according to the literature, this is one of the most common dam heights
+                P_i = hyd.dam_height(self.known_baseflow, self.weir_length, delta_wse_i, y_i)  # , z_i)
+                if P_i < 0.1 or P_i > 100:
+                    # Raise an error that lhd_processor.py will catch, causing it to skip this dam
+                    raise ValueError(f"Invalid flow conditions: Calculated dam height ({P_i:.2f}m) is unrealistic.")
                 self.cross_sections[i].set_dam_height(P_i)
+
                 lhd_df.loc[lhd_df['ID'] == self.id, f'P_{i}'] = P_i * 3.281 # convert to ft
 
                 # now let's add the tailwater, flip, and conjugate depths for each flow/cross-section combo
@@ -561,7 +576,7 @@ class Dam:
             lhd_df.loc[lhd_df['ID'] == self.id, f'y_2_{i}'] = y_2s_string
 
         # update the csv file
-        # lhd_df.to_csv(lhd_csv, index=False)
+        lhd_df.to_csv(lhd_csv, index=False)
 
 
     def plot_rating_curves(self):
