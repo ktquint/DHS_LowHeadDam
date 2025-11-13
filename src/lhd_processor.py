@@ -1,7 +1,6 @@
 import os
 import ast
 import json
-import requests
 import threading
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
@@ -9,8 +8,8 @@ from tkinter import ttk, filedialog, messagebox
 import numpy as np
 import pandas as pd
 import geopandas as gpd
-import xarray as xr
 import matplotlib.pyplot as plt
+from hsclient import HydroShare
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 
@@ -190,12 +189,19 @@ def threaded_prepare_data():
 
         # --- 4. Load NWM data once ---
         nwm_ds = None
+        nwm_parquet = 'data/nwm_daily_retrospective.parquet'
         if hydrology == 'National Water Model':
             status_var.set("Loading NWM dataset...")
             try:
-                s3_path = 's3://noaa-nwm-retrospective-3-0-pds/CONUS/zarr/chrtout.zarr'
-                nwm_ds = xr.open_zarr(s3_path, consolidated=True, storage_options={"anon": True})
+                # read in the filtered parquet
+                # load as df then convert to xarray
+                nwm_df = pd.read_parquet(nwm_parquet)
+                nwm_ds = nwm_df.to_xarray()
                 status_var.set("NWM dataset loaded.")
+            except FileNotFoundError:
+                print(f"ERROR: NWM Parquet file not found at {nwm_parquet}")
+                status_var.set("ERROR: NWM parquet file not found.")
+                nwm_ds = None
             except Exception as e:
                 print(f"Could not open NWM zarr dataset. Error: {e}")
                 status_var.set("Error: Could not load NWM dataset.")
@@ -219,40 +225,34 @@ def threaded_prepare_data():
                 status_var.set(f"Dam {dam_id}: Assigning flowlines...")
 
                 # --- Find the VPU map file (and download if missing) ---
-                # 1. Get the main project folder path from the GUI
-                project_path = prep_project_entry.get()
-
-                # 2. Define the path to the data folder and the VPU map file
-                data_folder = os.path.join(project_path, "VPU")
-                tdx_vpu_map_path = os.path.join(data_folder, "vpu_boundaries.gpkg")
-                vpu_map_url = "http://geoglows-v2.s3-us-west-2.amazonaws.com/hydrography-global/vpu-boundaries.gpkg"
+                # Define the path to the data folder and the VPU map file
+                tdx_vpu_map_path = "./data/vpu-boundaries.gpkg"
+                vpu_resource_id = "88759266f9c74df8b5bb5f52d142ba8e"
+                vpu_filename = "vpu-boundaries.gpkg"
 
                 if hydrography == 'GEOGLOWS':
                     if not os.path.exists(tdx_vpu_map_path):
-                        # File is missing, let's download it.
+                        # File is missing, let's download it from HydroShare
                         try:
                             # Inform the user this is a one-time download
                             messagebox.showinfo("Downloading Data",
                                                 "The GEOGLOWS VPU map file is missing.\n"
-                                                "The program will now download it (one-time, ~2 GB).\n"
-                                                "This may take a moment.")
-                            status_var.set("Downloading vpu_boundaries.gpkg...")
-
-                            # Ensure the 'data' directory exists
-                            os.makedirs(data_folder, exist_ok=True)
+                                                "The program will now download it from HydroShare.\n")
+                            status_var.set("Downloading vpu-boundaries.gpkg...")
 
                             # Download the file
-                            with requests.get(vpu_map_url, stream=True) as r:
-                                r.raise_for_status()  # Check for download errors
-                                with open(tdx_vpu_map_path, 'wb') as f:
-                                    for chunk in r.iter_content(chunk_size=8192):
-                                        f.write(chunk)
+                            hs = HydroShare()
+
+                            resource = hs.resource(vpu_resource_id)
+                            resource.file_download(path=vpu_filename,
+                                                   save_path=tdx_vpu_map_path)
 
                             status_var.set("VPU map download complete.")
 
                         except Exception as e:
                             messagebox.showerror("Download Failed",
-                                                 f"Failed to automatically download the VPU map file from:\n{vpu_map_url}\n\n"
+                                                 f"Failed to automatically download the VPU map file \
+                                                 from: HydroShare\n\n"
                                                  f"Error: {e}\n\n"
                                                  "Please download the file manually and place it in the 'data' folder "
                                                  "of your project, then try again.")
