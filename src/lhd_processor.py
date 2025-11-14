@@ -290,7 +290,6 @@ def threaded_prepare_data():
                         print(f"Skipping flow estimation for Dam No. {dam_id}: NWM dataset not loaded.")
                     else:
                         status_var.set(f"Dam {dam_id}: Creating stream reach...")
-                        print(nwm_ds)
                         dam.create_reach(nwm_ds)
 
                         status_var.set(f"Dam {dam_id}: Estimating baseflow...")
