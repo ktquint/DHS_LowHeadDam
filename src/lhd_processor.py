@@ -187,25 +187,58 @@ def threaded_prepare_data():
         except Exception as e:
             print(f"Warning: Could not pre-set DataFrame dtypes: {e}")
 
-        # --- 4. Load NWM data once ---
+        hydroshare_id = "88759266f9c74df8b5bb5f52d142ba8e"
+
+        # --- 4. Load NWM data once --- #
         nwm_ds = None
-        nwm_parquet = 'data/nwm_daily_retrospective.parquet'
+        # Get the absolute path to the directory containing lhd_processor.py
+        script_dir = os.path.dirname(os.path.realpath(__file__))
+        # Join that directory path with the relative path to your file
+        nwm_parquet = os.path.join(script_dir, 'data', 'nwm_daily_retrospective.parquet')
+
         if hydrology == 'National Water Model':
-            status_var.set("Loading NWM dataset...")
-            try:
-                # read in the filtered parquet
-                # load as df then convert to xarray
-                nwm_df = pd.read_parquet(nwm_parquet)
-                nwm_ds = nwm_df.to_xarray()
-                status_var.set("NWM dataset loaded.")
-            except FileNotFoundError:
-                print(f"ERROR: NWM Parquet file not found at {nwm_parquet}")
-                status_var.set("ERROR: NWM parquet file not found.")
-                nwm_ds = None
-            except Exception as e:
-                print(f"Could not open NWM zarr dataset. Error: {e}")
-                status_var.set("Error: Could not load NWM dataset.")
-                nwm_ds = None
+
+            # --- check if nwm parquet file exists --- #
+            if not os.path.exists(nwm_parquet):
+                try:
+                    messagebox.showinfo("Downloading Data",
+                                        "The NWM Parquet file is missing.\n"
+                                        "The program will now download it from HydroShare.\n"
+                                        "This may take a moment.")
+                    # let's make the dir then
+                    data_path = os.path.join(script_dir, 'data')
+                    os.makedirs(data_path, exist_ok=True)
+
+                    # download the parquet
+                    hs = HydroShare()
+                    resource = hs.resource(hydroshare_id)
+                    resource.file_download(path='nwm_daily_retrospective.parquet',
+                                           save_path=nwm_parquet)
+                    status_var.set("NWM Parquet download complete.")
+
+                except Exception as e:
+                    messagebox.showerror("Download Failed",
+                                         f"Failed to automatically download the NWM Parquet file.\n\n"
+                                         f"Error: {e}\n\n"
+                                         "Please download the file manually and place it in the 'src/data' folder.")
+                    status_var.set("ERROR: NWM parquet file download failed.")
+
+            status_var.set("Reading NWM Parquet...")
+            # --- Try to load the dataset (if download didn't fail) ---
+            if nwm_ds is None:  # Will be None if file existed OR download succeeded
+                try:
+                    status_var.set("Loading NWM dataset...")
+                    nwm_df = pd.read_parquet(nwm_parquet)
+                    nwm_ds = nwm_df.to_xarray()
+                    status_var.set("NWM dataset loaded.")
+                except FileNotFoundError:
+                    print(f"ERROR: NWM Parquet file not found at {nwm_parquet}")
+                    status_var.set("ERROR: NWM parquet file not found.")
+                    nwm_ds = None
+                except Exception as e:
+                    print(f"Could not open NWM dataset. Error: {e}")
+                    status_var.set("Error: Could not load NWM dataset.")
+                    nwm_ds = None
 
         # --- 5. Main Processing Loop ---
         total_dams = len(lhd_df)
@@ -228,7 +261,7 @@ def threaded_prepare_data():
                 # Define the path to the data folder and the VPU map file
                 vpu_data_dir = "./data"  # <--- NEW: Define the save *directory*
                 tdx_vpu_map_path = os.path.join(vpu_data_dir, "vpu-boundaries.gpkg")  # <--- Use os.path.join
-                vpu_resource_id = "88759266f9c74df8b5bb5f52d142ba8e"
+
                 vpu_filename = "vpu-boundaries.gpkg"
 
                 if hydrography == 'GEOGLOWS':
@@ -246,7 +279,7 @@ def threaded_prepare_data():
 
                             # Download the file
                             hs = HydroShare()
-                            resource = hs.resource(vpu_resource_id)
+                            resource = hs.resource(hydroshare_id)
 
                             # Pass the *directory* to save_path, not the full file path
                             resource.file_download(path=vpu_filename,
