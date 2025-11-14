@@ -226,7 +226,8 @@ def threaded_prepare_data():
 
                 # --- Find the VPU map file (and download if missing) ---
                 # Define the path to the data folder and the VPU map file
-                tdx_vpu_map_path = "./data/vpu-boundaries.gpkg"
+                vpu_data_dir = "./data"  # <--- NEW: Define the save *directory*
+                tdx_vpu_map_path = os.path.join(vpu_data_dir, "vpu-boundaries.gpkg")  # <--- Use os.path.join
                 vpu_resource_id = "88759266f9c74df8b5bb5f52d142ba8e"
                 vpu_filename = "vpu-boundaries.gpkg"
 
@@ -240,12 +241,16 @@ def threaded_prepare_data():
                                                 "The program will now download it from HydroShare.\n")
                             status_var.set("Downloading vpu-boundaries.gpkg...")
 
+                            # Ensure the 'data' directory exists before saving to it
+                            os.makedirs(vpu_data_dir, exist_ok=True)
+
                             # Download the file
                             hs = HydroShare()
-
                             resource = hs.resource(vpu_resource_id)
+
+                            # Pass the *directory* to save_path, not the full file path
                             resource.file_download(path=vpu_filename,
-                                                   save_path=tdx_vpu_map_path)
+                                                   save_path=vpu_data_dir)
 
                             status_var.set("VPU map download complete.")
 
@@ -285,6 +290,7 @@ def threaded_prepare_data():
                         print(f"Skipping flow estimation for Dam No. {dam_id}: NWM dataset not loaded.")
                     else:
                         status_var.set(f"Dam {dam_id}: Creating stream reach...")
+                        print(nwm_ds)
                         dam.create_reach(nwm_ds)
 
                         status_var.set(f"Dam {dam_id}: Estimating baseflow...")
@@ -310,7 +316,7 @@ def threaded_prepare_data():
 
             except Exception as e:
                 print(f"---" * 20)
-                print(f"CRITICAL ERROR processing Dam No. {dam_id}: {e}")
+                print(f"CRITICAL ERROR preparing Dam No. {dam_id}: {e}")
                 print(f"Skipping this dam and moving to the next one.")
                 print(f"---" * 20)
                 status_var.set(f"Error on Dam {dam_id}: {e}. Skipping.")

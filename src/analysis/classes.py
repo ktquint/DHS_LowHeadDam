@@ -373,7 +373,7 @@ class CrossSection:
 
 
     def _y_dangerous(self):
-        Q_i = 1.0
+        Q_i = 0.01
         Q_min = fsolve(rating_curve_intercept, Q_i, args=(self.L, self.P, self.a, self.b, 'conjugate'))[0]
         Q_max = fsolve(rating_curve_intercept, Q_i, args=(self.L, self.P, self.a, self.b, 'flip'))[0]
         return Q_min * 35.315, Q_max * 35.315
@@ -471,19 +471,23 @@ class Dam:
 
         if hydrology == "GEOGLOWS":
             self.fatal_flows = ast.literal_eval(id_row.at[0, 'fatality_flows_GEOGLOWS'])
-            baseflow_val = id_row['dem_baseflow_GEOGLOWS'].values[0]
+            # --- MODIFICATION ---
+            # Use .at[] to ensure a scalar value is retrieved
+            baseflow_val = id_row.at[0, 'dem_baseflow_GEOGLOWS']
             # # establish which values to use as the comid
             # self.comid = id_row['LINKNO'].values[0]
 
         elif hydrology == "USGS":
             self.fatal_flows = ast.literal_eval(id_row.at[0, 'fatality_flows_USGS'])
-            baseflow_val = id_row['dem_baseflow_USGS'].values[0]
+            # --- MODIFICATION ---
+            baseflow_val = id_row.at[0, 'dem_baseflow_USGS']
             # flow_cfs = id_row['USGS_fatal_flows'].apply(ast.literal_eval).values[0]
             # self.fatal_flows = [Q / 35.315 for Q in flow_cfs]
 
         else:   # NWM
             self.fatal_flows = ast.literal_eval(id_row.at[0, 'fatality_flows_NWM'])
-            baseflow_val = id_row['dem_baseflow_NWM'].values[0]
+            # --- MODIFICATION ---
+            baseflow_val = id_row.at[0, 'dem_baseflow_NWM']
             # self.comid = id_row['reach_id'].values[0]
 
         try:

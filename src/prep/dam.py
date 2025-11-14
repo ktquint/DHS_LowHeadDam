@@ -16,12 +16,12 @@ class Dam:
             kwargs will be a .csv row turned into a dictionary
         """
         # database info
-        self.ID = kwargs['ID']
+        self.ID = int(kwargs['ID'])
         self.name = kwargs.get('name', None)
 
         # geographical info
-        self.latitude = kwargs['latitude']
-        self.longitude = kwargs['longitude']
+        self.latitude = float(kwargs['latitude'])
+        self.longitude = float(kwargs['longitude'])
         self.city = kwargs.get('city', None)
         self.county = kwargs.get('county', None)
         self.state = kwargs.get('state', None)
@@ -30,7 +30,7 @@ class Dam:
         self.fatality_dates = ast.literal_eval(kwargs['fatality_dates'])
 
         # physical information
-        self.weir_length = kwargs['weir_length']
+        self.weir_length = float(kwargs['weir_length'])
 
         # optional info that you may already have
         # i'm making so many different fields because I want to be able to store as much info as possible

@@ -1,5 +1,4 @@
 import io
-import os
 import requests
 import pandas as pd
 from pathlib import Path
@@ -9,7 +8,8 @@ from dotenv import load_dotenv
 env_path = Path(__file__).parent.parent / 'config' / '.env'
 load_dotenv(dotenv_path=env_path)
 
-nwm_api_key = os.getenv("API_KEY")
+# NWM API key is no longer used
+# nwm_api_key = os.getenv("API_KEY")
 
 def get_usgs_latlon(site_no):
     site_no = str(site_no).zfill(8)  # pad with leading zeros
@@ -48,21 +48,16 @@ def get_usgs_latlon(site_no):
 
 
 def get_nwm_latlon(reach_id):
-    url = f"https://nwm-api.ciroh.org/geometry?comids={reach_id}&key={nwm_api_key}"
-    response = requests.get(url)
-
-    if response.status_code != 200:
-        raise ValueError(f"NWM API request failed with status {response.status_code}: {response.text}")
-
-    data = response.json()[0]
-    data_geom = data['geometry']
-    coord_str = data_geom.replace("LINESTRING(", "").replace(")", "")
-    # Split on commas
-    coord_pairs = coord_str.split(", ")
-    # Take first coordinate pair
-    first_pair = coord_pairs[0]
-    lon_str, lat_str = first_pair.split(" ")
-    return float(lat_str), float(lon_str)  # lat, lon
+    """
+    This function is deprecated as the NWM API is no longer used.
+    Latitude and longitude data should be loaded from the
+    'nwm_daily_retrospective.parquet' file, which contains
+    lat/lon coordinates for each feature_id.
+    """
+    raise NotImplementedError(
+        "This function is deprecated. NWM API is no longer used. "
+        "Load lat/lon data from the nwm_daily_retrospective.parquet file."
+    )
 
 
 streamflow_df = pd.read_csv("E:/LowHead_Dam_Streamflow.csv")
@@ -77,4 +72,7 @@ for index, row in streamflow_df.iterrows():
     elif source == "National Water Model":
         print(source)
         print(comid)
-        print(get_nwm_latlon(comid))
+        try:
+            print(get_nwm_latlon(comid))
+        except NotImplementedError as e:
+            print(f"Skipping NWM comid {comid}: {e}")

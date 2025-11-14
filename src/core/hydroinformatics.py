@@ -1,14 +1,12 @@
-import io
 import os
 import geoglows
-import requests
 import numpy as np
 import pandas as pd
 import geopandas as gpd
 from math import cos, radians
 import matplotlib.pyplot as plt
 from typing import List, Optional
-from shapely.geometry import Point, box, LineString
+from shapely.geometry import Point, box
 
 
 # env_path = Path(__file__).parent.parent / 'config' / '.env'
@@ -16,7 +14,8 @@ from shapely.geometry import Point, box, LineString
 #
 # nwm_api_key = os.getenv("API_KEY")
 
-nwm_api_key = "AIzaSyC4BXXMQ9KIodnLnThFi5Iv4y1fDR4U1II"
+# NWM API key is no longer used
+# nwm_api_key = "AIzaSyC4BXXMQ9KIodnLnThFi5Iv4y1fDR4U1II"
 
 def make_bbox(latitude, longitude, distance_deg=0.5):
     """
@@ -37,7 +36,7 @@ def haversine(lat1, lon1, lat2, lon2):
     R = 6371.0  # Earth radius in km
     d_lat = radians(lat2 - lat1)
     d_lon = radians(lon2 - lon1)
-    a = sin(d_lat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(d_lon/2)**2
+    a = sin(d_lat / 2) ** 2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(d_lon / 2) ** 2
     c = 2 * atan2(sqrt(a), sqrt(1 - a))
     return R * c
 
@@ -149,30 +148,61 @@ class StreamReach:
             self._geoglows_geom = gpd.GeoDataFrame([nearest], crs=gdf.crs)
 
     def _load_nwm_reach(self, force_reload=True):
-        """Finds the nearest NWM reach and caches its ID and geometry."""
+        """
+        Finds the nearest NWM reach ID and point geometry from the
+        local nwm_ds (xarray dataset loaded from Parquet).
+        """
         if self._reach_id and not force_reload:
             return
 
-        # Fetch reach_id
-        r = requests.get(f"https://nwm-api.ciroh.org/geometry?lat={self.latitude}&lon={self.longitude}"
-                         f"&output_format=csv&key={nwm_api_key}")
-        if r.status_code != 200:
-            raise requests.exceptions.HTTPError(r.text)
-        df = pd.read_csv(io.StringIO(r.text))
-        self._reach_id = df['station_id'].values[0]
+        if self.nwm_ds is None:
+            raise ValueError("NWM dataset (nwm_ds) must be provided to StreamReach "
+                             "to find the nearest NWM reach.")
+
+        # Get coordinates and feature_ids from the xarray dataset
+        try:
+            # feature_id is a 1D coordinate
+            feature_ids = self.nwm_ds.feature_id.values
+
+            # --- THIS IS THE FIX ---
+            # latitude and longitude are 2D data variables (feature_id, time)
+            # in the dataset. But the lat/lon is the same for all times for a
+            # given feature_id. So, we select all feature_ids, but only the
+            # *first* time step (index 0) to get a 1D array of coordinates.
+            lats = self.nwm_ds.latitude.values[:, 0]
+            lons = self.nwm_ds.longitude.values[:, 0]
+            # --- END FIX ---
+
+        except AttributeError:
+            raise ValueError("nwm_ds is missing required coordinates 'latitude', 'longitude', or 'feature_id'. "
+                             "Ensure the Parquet file was created correctly.")
+        except IndexError:
+            raise ValueError("nwm_ds seems to have an empty time dimension. Cannot get coordinates.")
+
+        # Calculate haversine distance from the dam to all points in the dataset
+        # This will now work because lats and lons are 1D arrays
+        distances = [haversine(self.latitude, self.longitude, lat, lon) for lat, lon in zip(lats, lons)]
+
+        # Find the index of the closest NWM reach
+        min_dist_idx = np.argmin(distances)
+
+        # Get the feature_id (reach_id) for that closest reach
+        self._reach_id = feature_ids[min_dist_idx]
 
         # Fetch geometry if requested
         if self.fetch_geometry:
-            url = f"https://nwm-api.ciroh.org/geometry?comids={self._reach_id}&key={nwm_api_key}"
-            response = requests.get(url)
-            if response.status_code != 200:
-                raise ValueError(f"NWM API error {response.status_code}: {response.text}")
+            # The Parquet file only has point data (lat/lon), not LineString.
+            # We will create a Point geometry.
+            reach_lat = lats[min_dist_idx]
+            reach_lon = lons[min_dist_idx]
+            point_geom = Point(reach_lon, reach_lat)
 
-            data = response.json()[0]
-            coords = data['geometry'].replace("LINESTRING(", "").replace(")", "")
-            coord_pairs = [(float(x.split(" ")[0]), float(x.split(" ")[1])) for x in coords.split(", ")]
-            linestring = LineString(coord_pairs)
-            self._nwm_geom = gpd.GeoDataFrame({'reach_id': [self._reach_id]}, geometry=[linestring], crs="EPSG:4326")
+            # Create a GeoDataFrame with this point
+            self._nwm_geom = gpd.GeoDataFrame(
+                {'reach_id': [self._reach_id]},
+                geometry=[point_geom],
+                crs="EPSG:4326"
+            )
 
     def _load_geoglows_flow(self):
         """Fetches and processes GEOGLOWS streamflow data."""
@@ -187,6 +217,8 @@ class StreamReach:
         """Fetches and processes NWM streamflow data."""
         if self.nwm_ds is None:
             raise ValueError("NWM dataset (nwm_ds) must be provided for NWM streamflow.")
+
+        # This logic remains the same, as nwm_ds is the xarray dataset
         stream = self.nwm_ds['streamflow'].sel(feature_id=int(self.reach_id), time=slice("1979-02-01", None))
         df = stream.compute().to_dataframe().rename(columns={"streamflow": "flow_cms"})
         df.index = pd.to_datetime(df.index)
@@ -369,7 +401,6 @@ def _calculate_fdc(flow_data):
     return exceedance, sorted_flows
 
 
-
 def compare_fdcs(reach):
     """
         plots FDCs from multiple data sources for a given reach.
@@ -469,9 +500,9 @@ def create_multilayer_gpkg(
 
 
 def create_gpkg_from_lists(
-    lists_of_gdfs: List[List[gpd.GeoDataFrame]],
-    output_path: str,
-    layer_names: Optional[List[str]] = None
+        lists_of_gdfs: List[List[gpd.GeoDataFrame]],
+        output_path: str,
+        layer_names: Optional[List[str]] = None
 ) -> None:
     """
         Combines lists of GeoDataFrames and saves each combined list as a
@@ -503,7 +534,7 @@ def create_gpkg_from_lists(
             pd.concat(gdf_list, ignore_index=True), crs=crs
         )
         merged_gdfs.append(merged_gdf)
-        print(f"Merged list {i+1} into a single GeoDataFrame with {len(merged_gdf)} features.")
+        print(f"Merged list {i + 1} into a single GeoDataFrame with {len(merged_gdf)} features.")
 
     # Now call the original function with the list of merged GeoDataFrames
     create_multilayer_gpkg(merged_gdfs, output_path, layer_names)
