@@ -2,7 +2,7 @@ import json
 import pandas as pd
 
 
-def rathcelon_input(lhd_csv, output_loc, hydrography, hydrology):
+def rathcelon_input(lhd_csv, output_loc, hydrography, hydrology, nwm_parquet=None):
     lhd_df = pd.read_csv(lhd_csv)
     dams = []
     for index, row in lhd_df.iterrows():
@@ -47,7 +47,8 @@ def rathcelon_input(lhd_csv, output_loc, hydrography, hydrology):
                     "process_stream_network": True,
                     "find_banks_based_on_landcover": False,
                     "create_reach_average_curve_file": False,
-                    "known_baseflow": known_baseflow}
+                    "known_baseflow": known_baseflow,
+                    "flow_parquet_file": nwm_parquet}
         dams.append(dam_dict)
 
     input_data = {"dams": dams}
