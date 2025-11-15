@@ -217,10 +217,10 @@ def create_input_file():
                         dam.create_reach(nwm_ds)
 
                         status_var.set(f"Dam {dam_id}: Estimating baseflow...")
-                        dam.est_dem_baseflow()
+                        dam.set_dem_baseflow()
 
                         status_var.set(f"Dam {dam_id}: Estimating fatal flows...")
-                        dam.est_fatal_flows()
+                        dam.set_fatal_flows()
 
                 dam.fdc_to_csv()
 

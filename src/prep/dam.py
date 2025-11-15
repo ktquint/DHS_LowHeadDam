@@ -119,28 +119,36 @@ class Dam:
                                    nwm_ds, streamflow=True, geometry=False)
 
 
-    def est_dem_baseflow(self):
+    def set_dem_baseflow(self):
         """
             estimates the DEM baseflow if it hasn't been calculated yet...
         """
         print("Estimating DEM baseflow...")
-
+        # 1. Determine the attribute name to check based on hydrology
+        baseflow_attr = None
         if self.hydrology == 'National Water Model':
-            if pd.isna(self.dem_baseflow_NWM):
-                print(f"dem_baseflow_NWM is not set. Calling estimation function for Dam ID: {self.ID}")
-                baseflow = est_dem_baseflow(self.dam_reach, self.hydrology)
-                self.dem_baseflow_NWM = baseflow
-            else:
-                print(f"dem_baseflow_NWM already has a value: {self.dem_baseflow_NWM}")
+            baseflow_attr = 'dem_baseflow_NWM'
         elif self.hydrology == 'GEOGLOWS':
-            if pd.isna(self.dem_baseflow_GEOGLOWS):
-                print(f"dem_baseflow_GEOGLOWS is not set. Calling estimation function for Dam ID: {self.ID}")
-                baseflow = est_dem_baseflow(self.dam_reach, self.hydrology)
-                self.dem_baseflow_GEOGLOWS = baseflow
-            else:
-                print(f"dem_baseflow_GEOGLOWS already has a value: {self.dem_baseflow_GEOGLOWS}")
+            baseflow_attr = 'dem_baseflow_GEOGLOWS'
 
-    def est_fatal_flows(self):
+        # 2. Now, run the logic a single time using the dynamic attribute name
+        if baseflow_attr:
+            # Get the current value of the attribute (e.g., self.dem_baseflow_NWM)
+            current_value = getattr(self, baseflow_attr)
+
+            if pd.isna(current_value):
+                print(f"{baseflow_attr} is not set. Calling estimation function for Dam ID: {self.ID}")
+                baseflow = est_dem_baseflow(self.dam_reach, self.hydrology)
+                # Set the attribute (e.g., self.dem_baseflow_NWM = baseflow)
+                setattr(self, baseflow_attr, baseflow)
+            else:
+                print(f"{baseflow_attr} already has a value: {current_value}")
+        else:
+            # This else handles cases where hydrology is not NWM or GEOGLOWS
+            print(f"Skipping baseflow check: hydrology '{self.hydrology}' is not recognized.")
+
+
+    def set_fatal_flows(self):
         print("Estimating fatal flows...")
         fatality_dates_kept = []  # Renamed to avoid confusion
         fatality_flows_kept = []  # Renamed

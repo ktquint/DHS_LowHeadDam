@@ -166,7 +166,7 @@ def merge_arc_results(curve_file: str, local_vdt: str, cross_section: str) -> gp
 
 
 class CrossSection:
-    def __init__(self, index, xs_row, dam_id, weir_length, fig_dir):
+    def __init__(self, index, xs_row, dam_id, weir_length, fig_dir, hydrology):
         """
             lateral is a str of lateral distances
             elevation is a str of elevations
@@ -194,6 +194,7 @@ class CrossSection:
             self.distance = int((self.index) * self.L)
 
         # rating curve info
+        self.hydrology = hydrology
         self.a = xs_row['depth_a']
         self.b = xs_row['depth_b']
         self.max_Q = xs_row['QMax']
@@ -276,7 +277,7 @@ class CrossSection:
 
         # wse line
         ax.plot(self.water_lateral, self.water_elevation,
-                 color='cyan', linestyle='--', label=f'Water Surface Elevation: {self.wse} m')
+                 color='cyan', linestyle='--', label=f'Water Surface Elevation: {round(self.wse,1)} m')
         ax.set_xlim(-1.5 * self.L, 1.5 * self.L)
         ax.set_xlabel('Lateral Distance (m)')
         ax.set_ylabel('Elevation (m)')
@@ -383,7 +384,8 @@ class CrossSection:
         results_dir = os.path.dirname(self.fig_dir)
 
         # read in the csv and plot the fdc data
-        fdc_csv = os.path.join(results_dir, 'FLOW', f'{self.id}_National Water Model_FDC.csv')
+
+        fdc_csv = os.path.join(results_dir, 'FLOW', f'{self.id}_{self.hydrology}_FDC.csv')
         fdc_df = pd.read_csv(fdc_csv)
         fdc_df['Flow (cfs)'] = fdc_df['Flow (cms)'] * 35.315
         ax.plot(fdc_df['Exceedance (%)'], fdc_df['Flow (cfs)'], label='FDC', color='dodgerblue')
@@ -518,7 +520,7 @@ class Dam:
 
         # let's go through each row of the df and create cross-sections objects
         for index, row in self.dam_gdf.iterrows():
-            self.cross_sections.append(CrossSection(index, row, self.id, self.weir_length, self.fig_dir))
+            self.cross_sections.append(CrossSection(index, row, self.id, self.weir_length, self.fig_dir, self.hydrology))
 
 
         # let's add the dam height and slope to the csv

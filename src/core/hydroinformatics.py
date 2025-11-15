@@ -1,31 +1,12 @@
 import os
+import fiona
 import geoglows
 import numpy as np
 import pandas as pd
 import geopandas as gpd
-from math import cos, radians
 import matplotlib.pyplot as plt
 from typing import List, Optional
-from shapely.geometry import Point, box
-
-
-# env_path = Path(__file__).parent.parent / 'config' / '.env'
-# load_dotenv(dotenv_path=env_path)
-#
-# nwm_api_key = os.getenv("API_KEY")
-
-# NWM API key is no longer used
-# nwm_api_key = "AIzaSyC4BXXMQ9KIodnLnThFi5Iv4y1fDR4U1II"
-
-def make_bbox(latitude, longitude, distance_deg=0.5):
-    """
-        creates a bounding box around a point (lat, lon) ±distance_deg degrees.
-    """
-    lat_min = latitude - distance_deg
-    lat_max = latitude + distance_deg
-    lon_min = longitude - distance_deg / cos(radians(latitude))  # adjust for longitude convergence
-    lon_max = longitude + distance_deg / cos(radians(latitude))
-    return lon_min, lat_min, lon_max, lat_max
+from shapely.geometry import Point
 
 
 def haversine(lat1, lon1, lat2, lon2):
@@ -133,19 +114,65 @@ class StreamReach:
         if self._linkno and not force_reload:
             return
 
-        bbox_coords = make_bbox(self.latitude, self.longitude, 0.002)
-        bbox_geom = box(*bbox_coords)
-        gdf = gpd.read_file(self.geoglows_streams_path, bbox=bbox_geom)
-        dam_point = Point(self.latitude, self.longitude)
+        # === 1. Get the target file's CRS ===
+        try:
+            with fiona.open(self.geoglows_streams_path) as src:
+                target_crs = src.crs
+        except Exception as e:
+            print(f"CRITICAL ERROR: Could not read CRS from {self.geoglows_streams_path}. Error: {e}")
+            return
 
-        gdf["distance"] = gdf.geometry.distance(dam_point)
-        max_strm_order = gdf['strmOrder'].max()
-        highest_order_streams = gdf[gdf['strmOrder'] == max_strm_order]
+        # === 2. Create your dam point in Lat/Lon (EPSG:4326) ===
+        dam_point_latlon = Point(self.longitude, self.latitude)
+
+        # Create a GeoSeries/GeoDataFrame for the point so we can .to_crs() it
+        dam_point_gdf = gpd.GeoSeries([dam_point_latlon], crs="EPSG:4326")
+
+        # === 3. Transform the point to the file's CRS ===
+        dam_point_projected_gdf = dam_point_gdf.to_crs(target_crs)
+        dam_point_projected = dam_point_projected_gdf.iloc[0]
+
+        # === 4. Create your search buffer *in the projected CRS* ===
+        # Let's search in a 200-meter radius.
+        search_buffer = dam_point_projected.buffer(200)  # 2000 meters
+
+        # === 5. Read the file using the buffer as the filter ===
+        # This is the "spatial query"
+        gdf = gpd.read_file(
+            self.geoglows_streams_path,
+            bbox=search_buffer.bounds  # Use the buffer's bounds for the fast read
+        )
+
+        if gdf.empty:
+            print(f"WARNING: No streams found within 2000m of the dam.")
+            return
+
+        # === 6. Proceed with your logic ===
+
+        # This is a *more accurate* filter. The bbox read is fast but
+        # might include streams in the corners. This filters to the circle.
+        streams_inside_buffer = gdf[gdf.geometry.intersects(search_buffer)]
+
+        if streams_inside_buffer.empty:
+            print(f"WARNING: No streams intersected the 2000m buffer.")
+            return
+
+        # Calculate distance using the *projected* point
+        streams_inside_buffer["distance"] = streams_inside_buffer.geometry.distance(dam_point_projected)
+
+        max_strm_order = streams_inside_buffer['strmOrder'].max()
+        highest_order_streams = streams_inside_buffer[streams_inside_buffer['strmOrder'] == max_strm_order]
+
+        if highest_order_streams.empty:
+            print(f"WARNING: No 'highest_order_streams' found.")
+            return
+
         nearest = highest_order_streams.loc[highest_order_streams['distance'].idxmin()]
 
         self._linkno = nearest["LINKNO"]
+
         if self.fetch_geometry:
-            self._geoglows_geom = gpd.GeoDataFrame([nearest], crs=gdf.crs)
+            self._geoglows_geom = gpd.GeoDataFrame([nearest], crs=target_crs)
 
     def _load_nwm_reach(self, force_reload=True):
         """
@@ -206,9 +233,18 @@ class StreamReach:
 
     def _load_geoglows_flow(self):
         """Fetches and processes GEOGLOWS streamflow data."""
-        df = geoglows.data.retrospective(river_id=self._linkno, bias_corrected=True)
+        # Just access the property. This triggers the getter method.
+        linkno_val = self.linkno
+
+        # Use the retrieved value
+        df = geoglows.data.retrospective(river_id=linkno_val, bias_corrected=True)
+
         df.index = pd.to_datetime(df.index)
-        df = df.reset_index().rename(columns={"index": "time", int(self._linkno): "flow_cms"})
+
+        # You were also using self._linkno in the rename, which might be None
+        # if it was just loaded. Use the local variable 'linkno_val' instead.
+        df = df.reset_index().rename(columns={"index": "time", int(linkno_val): "flow_cms"})
+
         df = df.sort_values('time')
         df = df[df['flow_cms'] >= 0]
         return df.set_index('time')
@@ -356,6 +392,13 @@ class StreamReach:
                 exceedance, sorted_flows = _calculate_fdc(flow_data)
                 fdc_results[source] = (exceedance.tolist(), sorted_flows.tolist())
         return fdc_results
+
+
+    def __repr__(self):
+        return (f"Hi, I'm a stream reach\n"
+                f"I have the flows: {self._geoglows_df}")
+
+
 
 
 def compare_hydrographs(reach):

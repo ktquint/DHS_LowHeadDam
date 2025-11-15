@@ -326,10 +326,10 @@ def threaded_prepare_data():
                         dam.create_reach(nwm_ds)
 
                         status_var.set(f"Dam {dam_id}: Estimating baseflow...")
-                        dam.est_dem_baseflow()
+                        dam.set_dem_baseflow()
 
                         status_var.set(f"Dam {dam_id}: Estimating fatal flows...")
-                        dam.est_fatal_flows()
+                        dam.set_fatal_flows()
 
                 dam.fdc_to_csv()
 
@@ -363,7 +363,10 @@ def threaded_prepare_data():
             json_loc = prep_json_entry.get()
 
             # This function now also returns the dam dictionaries
-            cj.rathcelon_input(lhd_csv, json_loc, hydrography, hydrology, nwm_parquet)
+            if hydrology == 'National Water Model':
+                cj.rathcelon_input(lhd_csv, json_loc, hydrography, hydrology, nwm_parquet)
+            else:
+                cj.rathcelon_input(lhd_csv, json_loc, hydrography, hydrology)
 
             status_var.set(f"Data preparation complete. {processed_dams_count} dams prepped.")
             messagebox.showinfo("Success", f"Data preparation complete.\n{processed_dams_count} dams processed.\n"
