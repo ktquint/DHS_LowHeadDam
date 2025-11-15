@@ -1152,8 +1152,8 @@ analysis_button_frame = ttk.Frame(analysis_tab)
 analysis_button_frame.pack(pady=10, fill=tk.X, padx=10, side=tk.TOP)
 analysis_button_frame.columnconfigure(0, weight=1)
 # --- Column 1 configure REMOVED ---
-analysis_run_button = ttk.Button(analysis_button_frame, text="4. Analyze & Save ALL Dam Data",
-                                 command=start_analysis_processing)
+analysis_run_button = ttk.Button(analysis_button_frame, text="3. Analyze & Save All Dam Data",
+                                 command=start_analysis_processing, style="Accent.TButton")
 analysis_run_button.grid(row=0, column=0, padx=5, ipady=5, sticky=tk.EW)
 # --- Summary Button REMOVED (moved to checkbox) ---
 
@@ -1206,7 +1206,7 @@ ttk.Checkbutton(analysis_figure_frame, text="Generate Bar Chart (all dams)",
 # --- Analysis: NEW Display Button ---
 analysis_display_button_frame = ttk.Frame(analysis_tab)
 analysis_display_button_frame.pack(pady=10, fill=tk.X, padx=10, side=tk.TOP)
-analysis_display_button = ttk.Button(analysis_display_button_frame, text="5. Generate & Display Dam Figures",
+analysis_display_button = ttk.Button(analysis_display_button_frame, text="4. Generate & Display Dam Figures",
                                      command=start_display_dam_figures_thread, style="Accent.TButton")
 analysis_display_button.pack(fill=tk.X, ipady=5)
 
