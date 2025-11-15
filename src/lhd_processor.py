@@ -155,9 +155,9 @@ def threaded_prepare_data():
     try:
         # --- 1. Get all values from GUI ---
         lhd_csv = prep_database_entry.get()
-        hydrography = prep_hydro_var.get()
+        flowline = prep_flowline_var.get()
         dem_resolution = prep_dd_var.get()
-        hydrology = prep_logy_var.get()
+        streamflow = prep_streamflow_var.get()
         dem_folder = prep_dem_entry.get()
         strm_folder = prep_strm_entry.get()
         results_folder = prep_results_entry.get()
@@ -167,7 +167,7 @@ def threaded_prepare_data():
             messagebox.showerror("Error", f"Database file not found:\n{lhd_csv}")
             return
         if not all(
-                [lhd_csv, hydrography, dem_resolution, hydrology, dem_folder, strm_folder, results_folder]):
+                [lhd_csv, flowline, dem_resolution, streamflow, dem_folder, strm_folder, results_folder]):
             messagebox.showwarning("Missing Info", "Please fill out all path and setting fields.")
             return
 
@@ -197,15 +197,18 @@ def threaded_prepare_data():
 
         hydroshare_id = "88759266f9c74df8b5bb5f52d142ba8e"
 
-        # --- 4. Load NWM data once --- #
+        # --- 4. Load NWM or GEOGLOWS data once --- #
         nwm_ds = None
         # Get the absolute path to the directory containing lhd_processor.py
         script_dir = os.path.dirname(os.path.realpath(__file__))
+        data_dir = os.path.join(script_dir, 'data')
         # Join that directory path with the relative path to your file
-        nwm_parquet = os.path.join(script_dir, 'data', 'nwm_daily_retrospective.parquet')
+        nwm_parquet = os.path.join(data_dir, 'nwm_daily_retrospective.parquet')
+        # if we want the GEOGLOWS streamflow, we'll need to also download the GEOGLOWS flowlines
+        vpu_filename = "vpu-boundaries.gpkg"
+        tdx_vpu_map = os.path.join(data_dir, vpu_filename)
 
-        if hydrology == 'National Water Model':
-
+        if streamflow == 'National Water Model':
             # --- check if nwm parquet file exists --- #
             if not os.path.exists(nwm_parquet):
                 try:
@@ -248,6 +251,37 @@ def threaded_prepare_data():
                     status_var.set("Error: Could not load NWM dataset.")
                     nwm_ds = None
 
+        elif streamflow == 'GEOGLOWS' or flowline == 'GEOGLOWS':
+            if not os.path.exists(tdx_vpu_map):
+                # File is missing, let's download it from HydroShare
+                try:
+                    # Inform the user this is a one-time download
+                    messagebox.showinfo("Downloading Flowlines...",
+                                        "The GEOGLOWS VPU map file is missing.\n"
+                                        "The program will now download it from HydroShare.\n")
+                    status_var.set("Downloading vpu-boundaries.gpkg...")
+
+                    # Ensure the 'data' directory exists before saving to it
+                    os.makedirs(data_dir, exist_ok=True)
+
+                    # Download the file
+                    hs = HydroShare()
+                    resource = hs.resource(hydroshare_id)
+
+                    # Pass the *directory* to save_path, not the full file path
+                    resource.file_download(path=vpu_filename,
+                                           save_path=tdx_vpu_map)
+
+                    status_var.set("VPU map download complete.")
+
+                except Exception as e:
+                    messagebox.showerror("Download Failed",
+                                         f"Failed to automatically download the VPU map file \
+                                         from: HydroShare\n\n"
+                                         f"Error: {e}\n\n"
+                                         "Please download the file manually and place it in the 'data' folder "
+                                         "of your project, then try again.")
+
         # --- 5. Main Processing Loop ---
         total_dams = len(lhd_df)
         processed_dams_count = 0
@@ -260,53 +294,14 @@ def threaded_prepare_data():
                 status_var.set(f"Prep: Dam {dam_id} ({i + 1} of {total_dams})...")
 
                 dam = PrepDam(**row.to_dict())
-                dam.assign_hydrology(hydrology)
-                dam.assign_hydrography(hydrography)
+                dam.assign_hydrology(streamflow)
+                dam.assign_hydrography(flowline)
 
                 status_var.set(f"Dam {dam_id}: Assigning flowlines...")
 
-                # --- Find the VPU map file (and download if missing) ---
-                # Define the path to the data folder and the VPU map file
-                vpu_data_dir = "./data"  # <--- NEW: Define the save *directory*
-                tdx_vpu_map_path = os.path.join(vpu_data_dir, "vpu-boundaries.gpkg")  # <--- Use os.path.join
-
-                vpu_filename = "vpu-boundaries.gpkg"
-
-                if hydrography == 'GEOGLOWS':
-                    if not os.path.exists(tdx_vpu_map_path):
-                        # File is missing, let's download it from HydroShare
-                        try:
-                            # Inform the user this is a one-time download
-                            messagebox.showinfo("Downloading Data",
-                                                "The GEOGLOWS VPU map file is missing.\n"
-                                                "The program will now download it from HydroShare.\n")
-                            status_var.set("Downloading vpu-boundaries.gpkg...")
-
-                            # Ensure the 'data' directory exists before saving to it
-                            os.makedirs(vpu_data_dir, exist_ok=True)
-
-                            # Download the file
-                            hs = HydroShare()
-                            resource = hs.resource(hydroshare_id)
-
-                            # Pass the *directory* to save_path, not the full file path
-                            resource.file_download(path=vpu_filename,
-                                                   save_path=vpu_data_dir)
-
-                            status_var.set("VPU map download complete.")
-
-                        except Exception as e:
-                            messagebox.showerror("Download Failed",
-                                                 f"Failed to automatically download the VPU map file \
-                                                 from: HydroShare\n\n"
-                                                 f"Error: {e}\n\n"
-                                                 "Please download the file manually and place it in the 'data' folder "
-                                                 "of your project, then try again.")
-                            continue  # Skips this dam
-
                 # 'strm_folder' is the LHD_STRMs path (where NHD/VPU downloads go)
                 # 'tdx_vpu_map_path' is the path to our map file (it either existed or was just downloaded)
-                dam.assign_flowlines(strm_folder, tdx_vpu_map_path)
+                dam.assign_flowlines(strm_folder, tdx_vpu_map)
 
                 status_var.set(f"Dam {dam_id}: Assigning DEM...")
                 dam.assign_dem(dem_folder, dem_resolution)
@@ -319,19 +314,19 @@ def threaded_prepare_data():
                 dam.assign_output(results_folder)
 
                 needs_reach = False
-                if hydrology == 'National Water Model':
+                if streamflow == 'National Water Model':
                     if pd.isna(row.get('dem_baseflow_NWM')) or pd.isna(row.get('fatality_flows_NWM')):
                         needs_reach = True
-                elif hydrology == 'GEOGLOWS':
+                elif streamflow == 'GEOGLOWS':
                     if pd.isna(row.get('dem_baseflow_GEOGLOWS')) or pd.isna(row.get('fatality_flows_GEOGLOWS')):
                         needs_reach = True
 
                 if needs_reach:
-                    if hydrology == 'National Water Model' and nwm_ds is None:
+                    if streamflow == 'National Water Model' and nwm_ds is None:
                         print(f"Skipping flow estimation for Dam No. {dam_id}: NWM dataset not loaded.")
                     else:
                         status_var.set(f"Dam {dam_id}: Creating stream reach...")
-                        dam.create_reach(nwm_ds)
+                        dam.create_reach(nwm_ds, tdx_vpu_map)
 
                         status_var.set(f"Dam {dam_id}: Estimating baseflow...")
                         dam.set_dem_baseflow()
@@ -371,10 +366,10 @@ def threaded_prepare_data():
             json_loc = prep_json_entry.get()
 
             # This function now also returns the dam dictionaries
-            if hydrology == 'National Water Model':
-                cj.rathcelon_input(lhd_csv, json_loc, hydrography, hydrology, nwm_parquet)
+            if streamflow == 'National Water Model':
+                cj.rathcelon_input(lhd_csv, json_loc, flowline, streamflow, nwm_parquet)
             else:
-                cj.rathcelon_input(lhd_csv, json_loc, hydrography, hydrology)
+                cj.rathcelon_input(lhd_csv, json_loc, flowline, streamflow)
 
             status_var.set(f"Data preparation complete. {processed_dams_count} dams prepped.")
             messagebox.showinfo("Success", f"Data preparation complete.\n{processed_dams_count} dams processed.\n"
@@ -1067,21 +1062,21 @@ prep_json_entry.grid(row=3, column=1, padx=5, pady=5, sticky=tk.EW)
 prep_hydro_frame = ttk.Frame(prep_data_frame)
 prep_hydro_frame.pack(pady=5, padx=10, fill=tk.X)
 prep_hydro_frame.columnconfigure(1, weight=1)
-ttk.Label(prep_hydro_frame, text="Hydrography Data Source:").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
-prep_hydro_var = tk.StringVar(value="NHDPlus")
-prep_hydro_dropdown = ttk.Combobox(prep_hydro_frame, textvariable=prep_hydro_var, state="readonly",
+ttk.Label(prep_hydro_frame, text="Flowline Source:").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
+prep_flowline_var = tk.StringVar(value="NHDPlus")
+prep_flowline_dropdown = ttk.Combobox(prep_hydro_frame, textvariable=prep_flowline_var, state="readonly",
                                    values=("NHDPlus", "GEOGLOWS"))
-prep_hydro_dropdown.grid(row=0, column=1, padx=5, pady=5, sticky=tk.EW)
-ttk.Label(prep_hydro_frame, text="Preferred DEM Resolution:").grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
+prep_flowline_dropdown.grid(row=0, column=1, padx=5, pady=5, sticky=tk.EW)
+ttk.Label(prep_hydro_frame, text="DEM Resolution:").grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
 prep_dd_var = tk.StringVar(value="1 m")
 prep_dd_dropdown = ttk.Combobox(prep_hydro_frame, textvariable=prep_dd_var, state="readonly",
                                 values=("1 m", "1/9 arc-second (~3 m)", "1/3 arc-second (~10 m)"))
 prep_dd_dropdown.grid(row=1, column=1, padx=5, pady=5, sticky=tk.EW)
-ttk.Label(prep_hydro_frame, text="Hydrology Data Source:").grid(row=2, column=0, padx=5, pady=5, sticky=tk.W)
-prep_logy_var = tk.StringVar(value="National Water Model")
-prep_logy_dropdown = ttk.Combobox(prep_hydro_frame, textvariable=prep_logy_var, state="readonly",
+ttk.Label(prep_hydro_frame, text="Streamflow Source:").grid(row=2, column=0, padx=5, pady=5, sticky=tk.W)
+prep_streamflow_var = tk.StringVar(value="National Water Model")
+prep_streamflow_dropdown = ttk.Combobox(prep_hydro_frame, textvariable=prep_streamflow_var, state="readonly",
                                   values=("National Water Model", "GEOGLOWS"))
-prep_logy_dropdown.grid(row=2, column=1, padx=5, pady=5, sticky=tk.EW)
+prep_streamflow_dropdown.grid(row=2, column=1, padx=5, pady=5, sticky=tk.EW)
 ttk.Label(prep_hydro_frame, text="Baseflow Estimation:").grid(row=3, column=0, padx=5, pady=5, sticky=tk.W)
 prep_baseflow_var = tk.StringVar(value="WSE and LiDAR Date")
 prep_baseflow_dropdown = ttk.Combobox(prep_hydro_frame, textvariable=prep_baseflow_var, state="readonly", values=(

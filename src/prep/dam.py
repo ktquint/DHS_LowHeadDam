@@ -108,15 +108,41 @@ class Dam:
         else:
             print(f"DEM assignment failed for Dam {self.ID}.")
 
-
-    def create_reach(self, nwm_ds=None):
+    def create_reach(self, nwm_ds=None, tdx_vpu_map=None):
+        """
+        Instantiates a StreamReach object based on the dam's
+        streamflow (hydrology) and flowline (hydrography) settings.
+        """
         print(f'Creating Stream Reach for Dam No. {self.ID}')
-        geoglows_streams = None
-        if self.hydrology == 'GEOGLOWS':
-            geoglows_streams = self.flowline_TDX
 
-        self.dam_reach = hi.StreamReach(self.ID, self.latitude, self.longitude, [self.hydrology], geoglows_streams,
-                                   nwm_ds, streamflow=True, geometry=False)
+        # 1. Build the data_sources list from *both* attributes
+        # (These are set by assign_hydrology and assign_hydrography)
+        data_sources = [self.hydrology]  # self.hydrology is the streamflow source
+        if self.hydrography not in data_sources:
+            data_sources.append(self.hydrography)  # self.hydrography is the flowline source
+
+        # 2. Check if *either* source requires the GEOGLOWS map
+        geoglows_map_path = None
+        if 'GEOGLOWS' in data_sources:
+            if tdx_vpu_map:
+                geoglows_map_path = tdx_vpu_map
+            else:
+                # Fallback to the old attribute if it exists, though tdx_vpu_map is preferred
+                geoglows_map_path = getattr(self, 'flowline_TDX', None)
+
+            if geoglows_map_path is None:
+                print(f"Warning: GEOGLOWS source selected for Dam {self.ID} but VPU map path not found.")
+
+        # 3. Create the StreamReach object with correct flags
+        self.dam_reach = hi.StreamReach(
+            lhd_id=self.ID,
+            latitude=self.latitude,
+            longitude=self.longitude,
+            data_sources=data_sources,  # Pass both sources
+            geoglows_streams=geoglows_map_path,  # FIX 2: Pass map if *either* source is GEOGLOWS
+            nwm_ds=nwm_ds,
+            streamflow=True  # <-- We always want to get streamflow
+        )
 
 
     def set_dem_baseflow(self):

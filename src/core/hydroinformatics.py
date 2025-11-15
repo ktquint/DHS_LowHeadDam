@@ -42,7 +42,7 @@ class StreamReachBase:
     """
 
     def __init__(self, lhd_id, latitude, longitude, data_sources, geoglows_streams=None,
-                 nwm_ds=None, streamflow=True, geometry=True):
+                 nwm_ds=None, streamflow=True):
         self.id = lhd_id
         self.latitude = latitude
         self.longitude = longitude
@@ -50,7 +50,6 @@ class StreamReachBase:
         self.geoglows_streams_path = geoglows_streams
         self.nwm_ds = nwm_ds
         self.fetch_streamflow = streamflow
-        self.fetch_geometry = geometry
 
         # Private attributes for caching results
         self._geoglows_df: Optional[pd.DataFrame] = None
@@ -58,8 +57,7 @@ class StreamReachBase:
         self._reach_id: Optional[Any] = None
         self._linkno: Optional[Any] = None
         self._site_no: Optional[Any] = None  # Note: USGS logic is not fully implemented in source
-        self._geoglows_geom: Optional[gpd.GeoDataFrame] = None
-        self._nwm_geom: Optional[gpd.GeoDataFrame] = None
+
 
     # --- STUB PROPERTIES FOR LINTER ---
     # These are overridden by the mixin classes but satisfy the linter
@@ -232,10 +230,8 @@ class StreamReachGEOGLOWS:
     # These attributes are expected to be defined by StreamReachBase
     _linkno: Optional[Any] = None
     _geoglows_df: Optional[pd.DataFrame] = None
-    _geoglows_geom: Optional[gpd.GeoDataFrame] = None
     data_sources: List[str] = []
     fetch_streamflow: bool = True
-    fetch_geometry: bool = True
     geoglows_streams_path: Optional[str] = None
     id: int = 0
     longitude: float = 0.0
@@ -256,15 +252,6 @@ class StreamReachGEOGLOWS:
         if self._geoglows_df is None and "GEOGLOWS" in self.data_sources and self.fetch_streamflow:
             self._geoglows_df = self._load_geoglows_flow()
         return self._geoglows_df
-
-    @property
-    def geoglows_geom(self) -> Optional[gpd.GeoDataFrame]:
-        """Lazy-loads and caches the GEOGLOWS geometry."""
-        if self._geoglows_geom is None and "GEOGLOWS" in self.data_sources and self.fetch_geometry:
-            # Ensure linkno is loaded first
-            _ = self.linkno
-            self._load_geoglows_reach(force_reload=False)  # _load_geoglows_reach populates the geometry
-        return self._geoglows_geom
 
     def _load_geoglows_reach(self, force_reload=True):
         """Finds the nearest GEOGLOWS reach and caches its ID and geometry."""
@@ -329,11 +316,7 @@ class StreamReachGEOGLOWS:
             return
 
         nearest = highest_order_streams.loc[highest_order_streams['distance'].idxmin()]
-
         self._linkno = nearest["LINKNO"]
-
-        if self.fetch_geometry:
-            self._geoglows_geom = gpd.GeoDataFrame([nearest], crs=target_crs)
 
     def _load_geoglows_flow(self) -> Optional[pd.DataFrame]:
         """Fetches and processes GEOGLOWS streamflow data."""
@@ -366,15 +349,12 @@ class StreamReachNWM:
     # These attributes are expected to be defined by StreamReachBase
     _reach_id: Optional[Any] = None
     _nwm_df: Optional[pd.DataFrame] = None
-    _nwm_geom: Optional[gpd.GeoDataFrame] = None
     data_sources: List[str] = []
     fetch_streamflow: bool = True
-    fetch_geometry: bool = True
     nwm_ds: Optional[Any] = None  # Assuming nwm_ds is an xarray.Dataset
     id: int = 0
     longitude: float = 0.0
     latitude: float = 0.0
-
     # --- End Linter Hints ---
 
     @property
@@ -390,14 +370,6 @@ class StreamReachNWM:
         if self._nwm_df is None and "National Water Model" in self.data_sources and self.fetch_streamflow:
             self._nwm_df = self._load_nwm_flow()
         return self._nwm_df
-
-    @property
-    def nwm_geom(self) -> Optional[gpd.GeoDataFrame]:
-        """Lazy-loads and caches the NWM geometry."""
-        if self._nwm_geom is None and "National Water Model" in self.data_sources and self.fetch_geometry:
-            _ = self.reach_id  # Ensure reach_id is loaded
-            self._load_nwm_reach(force_reload=False)  # _load_nwm_reach populates the geometry
-        return self._nwm_geom
 
     def _load_nwm_reach(self, force_reload=True):
         """
@@ -430,24 +402,8 @@ class StreamReachNWM:
 
         # Find the index of the closest NWM reach
         min_dist_idx = np.argmin(distances)
-
         # Get the feature_id (reach_id) for that closest reach
         self._reach_id = feature_ids[min_dist_idx]
-
-        # Fetch geometry if requested
-        if self.fetch_geometry:
-            # The Parquet file only has point data (lat/lon), not LineString.
-            # We will create a Point geometry.
-            reach_lat = lats[min_dist_idx]
-            reach_lon = lons[min_dist_idx]
-            point_geom = Point(reach_lon, reach_lat)
-
-            # Create a GeoDataFrame with this point
-            self._nwm_geom = gpd.GeoDataFrame(
-                {'reach_id': [self._reach_id]},
-                geometry=[point_geom],
-                crs="EPSG:4326"
-            )
 
     def _load_nwm_flow(self) -> Optional[pd.DataFrame]:
         """Fetches and processes NWM streamflow data."""
@@ -477,10 +433,10 @@ class StreamReach(StreamReachGEOGLOWS, StreamReachNWM, StreamReachBase):
     """
 
     def __init__(self, lhd_id, latitude, longitude, data_sources, geoglows_streams=None,
-                 nwm_ds=None, streamflow=True, geometry=True):
+                 nwm_ds=None, streamflow=True):
         # Call the base class __init__
         super().__init__(lhd_id, latitude, longitude, data_sources, geoglows_streams,
-                         nwm_ds, streamflow, geometry)
+                         nwm_ds, streamflow)
 
 
 #
