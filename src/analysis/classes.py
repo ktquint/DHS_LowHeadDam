@@ -7,22 +7,22 @@ the ID_XS_Out.txt file for each dam
 Dam holds the cross-section information
 """
 
-import os               # interacts with the operating system (e.g., file paths, directories)
-import ast              # safely parses Python code or literals (e.g., safe string-to-list conversion)
-import math             # Standard math functions (trigonometry, logarithms, rounding, etc.)
-import pyproj           # handles CRS conversions
-import numpy as np      # numerical computing with support for arrays, matrices, and math functions
-import pandas as pd     # data analysis and manipulation tool; reads in CSV, TXT, XLSX files
-import geopandas as gpd # extends pandas for working with geospatial vector data (points, lines, polygons)
-import contextily as ctx    # adds basemaps (e.g., OpenStreetMap) to geospatial plots, often used with geopandas
-from core import hydraulics as hyd
-import matplotlib.pyplot as plt # creates static, animated, and interactive plots and graphs
-from scipy.optimize import fsolve   # math ig ;)
+import os  # interacts with the operating system (e.g., file paths, directories)
+import ast  # safely parses Python code or literals (e.g., safe string-to-list conversion)
+import math  # Standard math functions (trigonometry, logarithms, rounding, etc.)
+import pyproj  # handles CRS conversions
+import numpy as np  # numerical computing with support for arrays, matrices, and math functions
+import pandas as pd  # data analysis and manipulation tool; reads in CSV, TXT, XLSX files
+import geopandas as gpd  # extends pandas for working with geospatial vector data (points, lines, polygons)
+import contextily as ctx  # adds basemaps (e.g., OpenStreetMap) to geospatial plots, often used with geopandas
+from ..core import hydraulics as hyd
+import matplotlib.pyplot as plt  # creates static, animated, and interactive plots and graphs
+from matplotlib.axes import Axes
+from scipy.optimize import fsolve  # math ig ;)
 from matplotlib.ticker import FixedLocator  # custom axis tick locations in plots
 # functions for reprojection and resampling of raster datasets
-                                            # (coordinate transforms, resolution changes)
+# (coordinate transforms, resolution changes)
 from matplotlib_scalebar.scalebar import ScaleBar
-
 
 
 def add_north_arrow(ax, size=0.1, loc_x=0.1, loc_y=0.9):
@@ -32,7 +32,7 @@ def add_north_arrow(ax, size=0.1, loc_x=0.1, loc_y=0.9):
     Parameters
     ----------
     ax : matplotlib axis
-        Axis to draw the arrow on.
+        to draw the arrow on.
     size : float
         Size of the arrow relative to figure.
     loc_x, loc_y : float
@@ -46,12 +46,12 @@ def add_north_arrow(ax, size=0.1, loc_x=0.1, loc_y=0.9):
                 arrowprops=dict(facecolor='black', width=5, headwidth=15))
 
 
-def rating_curve_intercept(Q, L, P, a, b, which):
+def rating_curve_intercept(Q: float, L: float, P: float, a: float, b: float, which: str) -> float:
     """
         write something here... :0
     """
     y_flip, y_2 = hyd.compute_flip_and_conjugate(Q, L, P)
-    y_t = a * Q**b
+    y_t = a * Q ** b
     if which == 'flip':
         return y_flip - y_t
     elif which == 'conjugate':
@@ -132,7 +132,7 @@ def fuzzy_merge(left, right, tol=2):
         return gpd.GeoDataFrame()
 
 
-def merge_arc_results(curve_file: str, local_vdt: str, cross_section: str) -> gpd.GeoDataFrame|pd.DataFrame:
+def merge_arc_results(curve_file: str, local_vdt: str, cross_section: str) -> gpd.GeoDataFrame | pd.DataFrame:
     # Read files
     vdt_gdf = gpd.read_file(local_vdt)
     rc_gdf = gpd.read_file(curve_file)
@@ -158,7 +158,7 @@ def merge_arc_results(curve_file: str, local_vdt: str, cross_section: str) -> gp
 
     results_gdf = results_gdf.sort_values(by=["Row", "Col"]).reset_index(drop=True)
 
-    if results_gdf['DEM_Elev'][0] < results_gdf['DEM_Elev'][len(results_gdf)-1]:
+    if results_gdf['DEM_Elev'][0] < results_gdf['DEM_Elev'][len(results_gdf) - 1]:
         # this means the cross-sections are going upstream, so let's switch 'em around
         results_gdf = results_gdf[::-1].reset_index(drop=True)
 
@@ -166,7 +166,8 @@ def merge_arc_results(curve_file: str, local_vdt: str, cross_section: str) -> gp
 
 
 class CrossSection:
-    def __init__(self, index, xs_row, dam_id, weir_length, fig_dir, hydrology):
+    # --- REFACTOR 1: Change the constructor signature ---
+    def __init__(self, index, xs_row, parent_dam):
         """
             lateral is a str of lateral distances
             elevation is a str of elevations
@@ -177,29 +178,35 @@ class CrossSection:
             rating curve eq.: d = a * Q **b
                         where 'depth_a' is a & 'depth_b' is b
         """
-        self.id = dam_id
-        self.fig_dir = fig_dir # all the figs we make for each cross-section will be saved here
+        # --- REFACTOR 2: Store the parent and get attributes from it ---
+        self.parent_dam = parent_dam
+        self.id = self.parent_dam.id
+        self.fig_dir = self.parent_dam.fig_dir  # all the figs we make for each cross-section will be saved here
+        self.L = self.parent_dam.weir_length
+        self.hydrology = self.parent_dam.hydrology
+        # --- End Refactor ---
 
         # geospatial info
         self.lat = xs_row['Lat']
         self.lon = xs_row['Lon']
-        self.L = weir_length
         self.index = index
         if self.index == 0:
             self.location = 'Upstream'
-            self.distance = "some" # idk
+            self.distance = "some"  # idk
+            self.fatal_qs = None  # Upstream XS doesn't have fatal flows
         else:
             self.location = 'Downstream'
             # downstream cross-sections are one weir length farther than the previous
-            self.distance = int((self.index) * self.L)
+            self.distance = int(self.index * self.L)
+            # --- REFACTOR 3: Get fatal_qs directly from the parent dam ---
+            self.fatal_qs = self.parent_dam.fatal_flows
+            # --- End Refactor ---
 
         # rating curve info
-        self.hydrology = hydrology
         self.a = xs_row['depth_a']
         self.b = xs_row['depth_b']
         self.max_Q = xs_row['QMax']
         self.slope = round_sigfig(xs_row['Slope'], 3)
-        self.fatal_qs = None # np.array(ast.literal_eval(id_row['fatality_flows'].values[0]))
 
         # cross-section plot info
         self.wse = xs_row['Elev']
@@ -251,20 +258,11 @@ class CrossSection:
         # initialize P, but don't give it a value yet
         self.P = None
 
-
     def set_dam_height(self, P):
         """
         pretty self-explanatory, no?
         """
         self.P = P
-
-
-    def set_fatal_qs(self, q_list):
-        """
-        same explanation as set_dam_height
-        """
-        self.fatal_qs = np.array(q_list)
-
 
     def plot_cross_section(self):
         """
@@ -273,11 +271,11 @@ class CrossSection:
         fig, ax = plt.subplots()
         # cross-section elevations
         ax.plot(self.lateral, self.elevation,
-                 color='black', label=f'Downstream Slope: {self.slope}')
+                color='black', label=f'Downstream Slope: {self.slope}')
 
         # wse line
         ax.plot(self.water_lateral, self.water_elevation,
-                 color='cyan', linestyle='--', label=f'Water Surface Elevation: {round(self.wse,1)} m')
+                color='cyan', linestyle='--', label=f'Water Surface Elevation: {round(self.wse, 1)} m')
         ax.set_xlim(-1.5 * self.L, 1.5 * self.L)
         ax.set_xlabel('Lateral Distance (m)')
         ax.set_ylabel('Elevation (m)')
@@ -293,13 +291,11 @@ class CrossSection:
         fig.savefig(fig_loc)
         return fig
 
-
     def create_rating_curve(self):
         x = np.linspace(0.01, self.max_Q, 100)
         y = self.a * x ** self.b
         plt.plot(x, y,
                  label=f'Rating Curve {self.distance} meters {self.location}: $y = {self.a:.3f} x^{{{self.b:.3f}}}$')
-
 
     def plot_rating_curve(self):
         x = np.linspace(0.01, self.max_Q, 100)
@@ -346,13 +342,13 @@ class CrossSection:
         # add labels and title then show
         ax.set_xlabel('Discharge (ft$^{3}$/s)')
         ax.set_ylabel('Depth (ft)')
-        # plt.xlabel('Discharge (m$^{3}$/s)')
-        # plt.ylabel('Depth (m)')
-
         ax.set_title(f'Submerged Hydraulic Jumps at Low-Head Dam No. {self.id}')
-        # ax.legend(loc='upper left') # <- REMOVE THIS LINE
 
     def plot_fatal_flows(self, ax):
+        # fatal_qs might be None for the upstream cross-section
+        if self.fatal_qs is None or len(self.fatal_qs) == 0:
+            return  # Don't try to plot if there are no fatal flows
+
         fatal_d = self.a * self.fatal_qs ** self.b
         ax.scatter(self.fatal_qs * 35.315, fatal_d * 3.281,
                    label="Recorded Fatality", marker='o',
@@ -372,15 +368,13 @@ class CrossSection:
         fig.savefig(fig_loc)
         return fig
 
-
     def _y_dangerous(self):
-        Q_i = 0.01
+        Q_i = np.array([0.01])
         Q_min = fsolve(rating_curve_intercept, Q_i, args=(self.L, self.P, self.a, self.b, 'conjugate'))[0]
         Q_max = fsolve(rating_curve_intercept, Q_i, args=(self.L, self.P, self.a, self.b, 'flip'))[0]
         return Q_min * 35.315, Q_max * 35.315
 
-
-    def plot_fdc(self, ax):
+    def plot_fdc(self, ax: Axes):
         results_dir = os.path.dirname(self.fig_dir)
 
         # read in the csv and plot the fdc data
@@ -407,7 +401,6 @@ class CrossSection:
         ax.grid(True)
         ax.legend()
 
-
     def create_combined_fdc(self):
         fig, ax = plt.subplots()
         self.plot_fdc(ax)
@@ -417,19 +410,17 @@ class CrossSection:
         return fig
 
 
-
-
 class Dam:
     """
     create a Dam based on the BYU LHD IDs
     add cross-sections with information from vdt & cross_section files
     """
+
     def __init__(self, lhd_id, lhd_csv, hydrology, est_dam, base_results_dir):
-        #database information
+        # database information
         self.id = int(lhd_id)
         self.hydrology = hydrology
         lhd_df = pd.read_csv(lhd_csv)
-
 
         id_row = lhd_df[lhd_df['ID'] == self.id].reset_index(drop=True)
 
@@ -437,7 +428,6 @@ class Dam:
         self.results_dir = base_results_dir
         self.fig_dir = os.path.join(self.results_dir, str(self.id), "FIGS")
         os.makedirs(self.fig_dir, exist_ok=True)
-
 
         if est_dam:
             # if we need to estimate dam height, we'll create guesses for each cross-section
@@ -461,7 +451,6 @@ class Dam:
         self.cross_sections = []
         self.weir_length = id_row['weir_length'].values[0]
 
-
         # fatality dates and fatal flows
         date_str = id_row['fatality_dates'].values[0]
         self.fatality_dates = ast.literal_eval(date_str)
@@ -473,7 +462,6 @@ class Dam:
 
         if hydrology == "GEOGLOWS":
             self.fatal_flows = ast.literal_eval(id_row.at[0, 'fatality_flows_GEOGLOWS'])
-            # --- MODIFICATION ---
             # Use .at[] to ensure a scalar value is retrieved
             baseflow_val = id_row.at[0, 'dem_baseflow_GEOGLOWS']
             # # establish which values to use as the comid
@@ -481,14 +469,10 @@ class Dam:
 
         elif hydrology == "USGS":
             self.fatal_flows = ast.literal_eval(id_row.at[0, 'fatality_flows_USGS'])
-            # --- MODIFICATION ---
             baseflow_val = id_row.at[0, 'dem_baseflow_USGS']
-            # flow_cfs = id_row['USGS_fatal_flows'].apply(ast.literal_eval).values[0]
-            # self.fatal_flows = [Q / 35.315 for Q in flow_cfs]
 
-        else:   # NWM
+        else:  # NWM
             self.fatal_flows = ast.literal_eval(id_row.at[0, 'fatality_flows_NWM'])
-            # --- MODIFICATION ---
             baseflow_val = id_row.at[0, 'dem_baseflow_NWM']
             # self.comid = id_row['reach_id'].values[0]
 
@@ -505,28 +489,30 @@ class Dam:
             # Re-raise the error to be caught by lhd_processor.py
             raise ValueError(f"Invalid baseflow value '{baseflow_val}' for Dam {self.id}")
 
-
         # ---------------------------------- READ IN VDT + CROSS-SECTION INFO ---------------------------------------- #
 
         vdt_gpkg = os.path.join(self.results_dir, str(self.id), "VDT", f"{self.id}_Local_VDT_Database.gpkg")
-        rc_gpkg = os.path.join(self.results_dir,  str(self.id), "VDT", f"{self.id}_Local_CurveFile.gpkg")
-        xs_gpkg = os.path.join(self.results_dir,  str(self.id), "XS", f"{self.id}_Local_XS_Lines.gpkg")
+        rc_gpkg = os.path.join(self.results_dir, str(self.id), "VDT", f"{self.id}_Local_CurveFile.gpkg")
+        xs_gpkg = os.path.join(self.results_dir, str(self.id), "XS", f"{self.id}_Local_XS_Lines.gpkg")
 
         self.dam_gdf = merge_arc_results(rc_gpkg, vdt_gpkg, xs_gpkg)
         # save tif and xs files for later...
         self.xs_gpkg = xs_gpkg
         self.bathy_tif = os.path.join(self.results_dir, str(self.id), "Bathymetry", f"{self.id}_ARC_Bathy.tif")
 
-
         # let's go through each row of the df and create cross-sections objects
         for index, row in self.dam_gdf.iterrows():
-            self.cross_sections.append(CrossSection(index, row, self.id, self.weir_length, self.fig_dir, self.hydrology))
-
+            # --- REFACTOR 5: Pass 'self' (the entire dam object) ---
+            self.cross_sections.append(CrossSection(index, row, self))
+            # --- End Refactor ---
 
         # let's add the dam height and slope to the csv
         for i in range(1, len(self.cross_sections)):
-            # add fatal qs to each cross-section
-            self.cross_sections[i].set_fatal_qs(self.fatal_flows)
+
+            # --- REFACTOR 6: This line is no longer needed ---
+            # self.cross_sections[i].set_fatal_qs(self.fatal_flows)
+            # --- End Refactor ---
+
             # add slope info to csv file--it's not too important
             s_i = self.cross_sections[i].slope
             lhd_df.loc[lhd_df['ID'] == self.id, f's_{i}'] = s_i
@@ -535,7 +521,7 @@ class Dam:
             y_2s = []
 
             if est_dam:
-                delta_wse_i = self.cross_sections[i].wse - self.cross_sections[0].wse # wse_ds - wse_us
+                delta_wse_i = self.cross_sections[i].wse - self.cross_sections[0].wse  # wse_ds - wse_us
 
                 # tailwater using the wse and bed_elevation
                 y_i = self.cross_sections[i].wse - self.cross_sections[i].bed_elevation
@@ -550,14 +536,14 @@ class Dam:
                     raise ValueError(f"Invalid flow conditions: Calculated dam height ({P_i:.2f}m) is unrealistic.")
                 self.cross_sections[i].set_dam_height(P_i)
 
-                lhd_df.loc[lhd_df['ID'] == self.id, f'P_{i}'] = P_i * 3.281 # convert to ft
+                lhd_df.loc[lhd_df['ID'] == self.id, f'P_{i}'] = P_i * 3.281  # convert to ft
 
                 # now let's add the tailwater, flip, and conjugate depths for each flow/cross-section combo
                 for flow in self.fatal_flows:
                     # calc. tailwater from power function
-                    y_t = self.cross_sections[i].a * flow**self.cross_sections[i].b
+                    y_t = self.cross_sections[i].a * flow ** self.cross_sections[i].b
 
-                    # calc conj. and flip using leuthusser eq.s
+                    # calc conj. and flip using Leuthusser eq.s
                     y_flip, y_2 = hyd.compute_flip_and_conjugate(flow, self.weir_length, P_i)
 
                     # add those depths to their respective lists
@@ -584,7 +570,6 @@ class Dam:
         # update the csv file
         lhd_df.to_csv(lhd_csv, index=False)
 
-
     def plot_rating_curves(self):
         for cross_section in self.cross_sections[1:]:
             cross_section.create_rating_curve()
@@ -596,16 +581,13 @@ class Dam:
         plt_loc = os.path.join(self.fig_dir, f"Rating Curves for LHD No. {self.id}.png")
         plt.savefig(plt_loc)
 
-
     def plot_cross_sections(self):
         for cross_section in self.cross_sections:
             cross_section.plot_cross_section()
 
-
     def plot_all_curves(self):
         for cross_section in self.cross_sections[1:]:
             cross_section.create_combined_fig()
-
 
     # noinspection PyTypeChecker
     def plot_map(self):
@@ -634,13 +616,10 @@ class Dam:
         ax.set_xlim(minx, maxx)
         ax.set_ylim(miny, maxy)
 
-        # Step P-1: Add basemap (lowest layer)
-        ctx.add_basemap(ax, crs='EPSG:3857', source=ctx.providers.Esri.WorldImagery, zorder=0)
+        # Add basemap (lowest layer)
+        ctx.add_basemap(ax, crs='EPSG:3857', source="Esri.WorldImagery", zorder=0)
 
-        # Step P-2: Plot raster on top of basemap
-        # show(raster_data, transform=transform, ax=ax, cmap='plasma', zorder=1, alpha=0.7)
-
-        # Step P-3: Plot shapefile points on top of both
+        # Plot shapefile points on top of both
         # separate into upstream and downstream cross-sections
         gdf_upstream = xs_gdf.iloc[[0]]
         gdf_downstream = xs_gdf.iloc[1:]
@@ -718,7 +697,6 @@ class Dam:
         # List to hold all XS indices for setting x-limits
         all_xs_indices = [upstream_idx]
 
-        # --- MODIFICATION: Changed scatter to axvline ---
         ax.axvline(x=upstream_idx, color='red', linestyle='--', label=f'Upstream Cross-Section')
 
         for i in range(1, len(self.dam_gdf)):
@@ -733,7 +711,6 @@ class Dam:
 
             all_xs_indices.append(downstream_idx)
 
-            # --- MODIFICATION: Changed scatter to vertical line ---
             # Only add one label for all downstream XSs
             label = 'Downstream Cross-Sections' if i == 1 else ""
             ax.axvline(x=downstream_idx, color='cyan', linestyle='--', label=label)
