@@ -1113,7 +1113,7 @@ rathcelon_run_button.grid(row=1, column=0, columnspan=2, padx=5, pady=10, sticky
 """
 
 # --- Analysis: Database and Results Paths ---
-analysis_path_frame = ttk.LabelFrame(analysis_tab, text="Database and Results Paths")
+analysis_path_frame = ttk.LabelFrame(analysis_tab, text="3. Select Results to Analyze")
 analysis_path_frame.pack(pady=10, padx=10, fill=tk.X, side=tk.TOP)
 analysis_path_frame.columnconfigure(1, weight=1)
 ttk.Button(analysis_path_frame, text="Select Database File (.csv)", command=select_analysis_csv_file).grid(row=0,
@@ -1129,17 +1129,11 @@ ttk.Button(analysis_path_frame, text="Select Results Folder", command=select_ana
 analysis_results_entry = ttk.Entry(analysis_path_frame)
 analysis_results_entry.grid(row=1, column=1, padx=5, pady=5, sticky=tk.EW)
 
-# --- Analysis: Settings ---
-analysis_settings_frame = ttk.LabelFrame(analysis_tab, text="Analysis Settings")
-analysis_settings_frame.pack(pady=10, padx=10, fill=tk.X, side=tk.TOP)
-analysis_settings_frame.columnconfigure(1, weight=1)
-ttk.Label(analysis_settings_frame, text="Hydrologic Data Source:").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
+ttk.Label(analysis_path_frame, text="Hydrologic Data Source:").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
 analysis_model_var = tk.StringVar(value="National Water Model")
-analysis_model_dropdown = ttk.Combobox(analysis_settings_frame, textvariable=analysis_model_var, state="readonly",
+analysis_model_dropdown = ttk.Combobox(analysis_path_frame, textvariable=analysis_model_var, state="readonly",
                                        values=("USGS", "GEOGLOWS", "National Water Model"))
 analysis_model_dropdown.grid(row=0, column=1, padx=5, pady=5, sticky=tk.EW)
-# --- Estimate Dam Height Checkbox REMOVED ---
-# --- Dam(s) to Analyze Dropdown MOVED ---
 
 
 # --- Analysis: Run Buttons ---
