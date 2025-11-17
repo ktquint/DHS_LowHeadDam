@@ -307,6 +307,8 @@ class StreamReachGEOGLOWS:
 
         # Calculate distance using the *projected* point
         streams_inside_buffer["distance"] = streams_inside_buffer.geometry.distance(dam_point_projected)
+        print('streams inside buffer: ')
+        print(streams_inside_buffer)
 
         max_strm_order = streams_inside_buffer['strmOrder'].max()
         highest_order_streams = streams_inside_buffer[streams_inside_buffer['strmOrder'] == max_strm_order]

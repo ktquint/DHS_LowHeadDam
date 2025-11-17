@@ -118,8 +118,6 @@ class Dam:
         # 1. Build the data_sources list from *both* attributes
         # (These are set by assign_hydrology and assign_hydrography)
         data_sources = [self.hydrology]  # self.hydrology is the streamflow source
-        if self.hydrography not in data_sources:
-            data_sources.append(self.hydrography)  # self.hydrography is the flowline source
 
         # 2. Check if *either* source requires the GEOGLOWS map
         geoglows_map_path = None
