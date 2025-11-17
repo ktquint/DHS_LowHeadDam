@@ -203,8 +203,11 @@ class CrossSection:
             # --- End Refactor ---
 
         # rating curve info
-        self.a = xs_row['depth_a']
-        self.b = xs_row['depth_b']
+        val_a = xs_row['depth_a']
+        val_b = xs_row['depth_b']
+
+        self.a = float(val_a[0]) if isinstance(val_a, list) else float(val_a)
+        self.b = float(val_b[0]) if isinstance(val_b, list) else float(val_b)
         self.max_Q = xs_row['QMax']
         self.slope = round_sigfig(xs_row['Slope'], 3)
 
@@ -348,9 +351,11 @@ class CrossSection:
         # fatal_qs might be None for the upstream cross-section
         if self.fatal_qs is None or len(self.fatal_qs) == 0:
             return  # Don't try to plot if there are no fatal flows
+        else:
+            np_fatal_qs = np.array(self.fatal_qs)
 
-        fatal_d = self.a * self.fatal_qs ** self.b
-        ax.scatter(self.fatal_qs * 35.315, fatal_d * 3.281,
+        fatal_d = self.a * np_fatal_qs ** self.b
+        ax.scatter(np_fatal_qs * 35.315, fatal_d * 3.281,
                    label="Recorded Fatality", marker='o',
                    facecolors='none', edgecolors='black')
 
@@ -369,7 +374,7 @@ class CrossSection:
         return fig
 
     def _y_dangerous(self):
-        Q_i = np.array([0.01])
+        Q_i = np.array([0.001])
         Q_min = fsolve(rating_curve_intercept, Q_i, args=(self.L, self.P, self.a, self.b, 'conjugate'))[0]
         Q_max = fsolve(rating_curve_intercept, Q_i, args=(self.L, self.P, self.a, self.b, 'flip'))[0]
         return Q_min * 35.315, Q_max * 35.315
@@ -386,7 +391,6 @@ class CrossSection:
 
         # plot the vertical lines where the dangerous depths are
         Q_conj, Q_flip = self._y_dangerous()
-        print(f"Conjugate:{Q_conj} Flip:{Q_flip}")
         P_flip = get_prob_from_Q(Q_flip, fdc_df)
         P_conj = get_prob_from_Q(Q_conj, fdc_df)
 
