@@ -77,6 +77,20 @@ def merge_databases(cf_database, xs_database):
     return pd.merge(xs_df, cf_df, on=['COMID', 'Row', 'Col'])
 
 
+def hydraulic_jump_type(y_2, y_t, y_flip):
+    """Classifies the hydraulic jump type based on tailwater depth."""
+    if y_t < y_2:
+        return 'A'
+    elif y_t == y_2:  # Note: exact float equality is rare
+        return 'B'
+    elif y_2 < y_t < y_flip:
+        return 'C'
+    elif y_t >= y_flip: # Changed to >= to catch the D case
+        return 'D'
+    else:
+        return 'N/A' # A fallback just in case
+
+
 def fuzzy_merge(left, right, tol=2):
     """
         Perform fuzzy merge based on Row and Col coordinates within tolerance
@@ -437,10 +451,14 @@ class Dam:
             # if we need to estimate dam height, we'll create guesses for each cross-section
             P_guesses = ['P_1', 'P_2', 'P_3', 'P_4']
             slope_est = ['s_1', 's_2', 's_3', 's_4']
+            type_guesses = ['type_1', 'type_2', 'type_3', 'type_4']
             for column in P_guesses:
                 if column not in lhd_df.columns:
                     lhd_df[column] = None
             for column in slope_est:
+                if column not in lhd_df.columns:
+                    lhd_df[column] = None
+            for column in type_guesses:
                 if column not in lhd_df.columns:
                     lhd_df[column] = None
             self.P = None
@@ -523,6 +541,7 @@ class Dam:
             y_ts = []
             y_flips = []
             y_2s = []
+            jump_types = []
 
             if est_dam:
                 delta_wse_i = self.cross_sections[i].wse - self.cross_sections[0].wse  # wse_ds - wse_us
@@ -554,22 +573,28 @@ class Dam:
                     y_ts.append(float(y_t))
                     y_flips.append(float(y_flip))
                     y_2s.append(float(y_2))
+                    jump_types.append(hydraulic_jump_type(y_2, y_t, y_flip))
             else:
                 self.cross_sections[i].set_dam_height(self.P)
                 for flow in self.fatal_flows:
+                    # calc. tailwater w/ power func.
                     y_t = self.cross_sections[i].a * flow ** self.cross_sections[i].b
                     y_flip, y_2 = hyd.compute_flip_and_conjugate(flow, self.weir_length, self.P)
                     y_ts.append(float(y_t))
                     y_flips.append(float(y_flip))
                     y_2s.append(float(y_2))
+                    jump_types.append(hydraulic_jump_type(y_2, y_t, y_flip))
 
             # convert those lists to strings and save them in columns in our data frame
             y_ts_string = str(y_ts)
             y_flips_string = str(y_flips)
             y_2s_string = str(y_2s)
+            jump_types_string = str(jump_types)
+
             lhd_df.loc[lhd_df['ID'] == self.id, f'y_t_{i}'] = y_ts_string
             lhd_df.loc[lhd_df['ID'] == self.id, f'y_flip_{i}'] = y_flips_string
             lhd_df.loc[lhd_df['ID'] == self.id, f'y_2_{i}'] = y_2s_string
+            lhd_df.loc[lhd_df['ID'] == self.id, f'type_{i}'] = jump_types_string
 
         # update the csv file
         lhd_df.to_csv(lhd_csv, index=False)

@@ -692,7 +692,6 @@ def threaded_process_ARC():
         for i, dam_id in enumerate(dam_ints):
             try:
                 status_var.set(f"Analyzing Dam {dam_id} ({i + 1} of {total_dams})...")
-                print(f"Analyzing Dam No. {dam_id}")
                 dam_i = AnalysisDam(int(dam_id), database_csv, selected_model, estimate_dam, results_dir)
 
                 # When "All Dams" is selected, just save figs
@@ -703,7 +702,6 @@ def threaded_process_ARC():
                     plt.close(xs.create_combined_fdc())  # Plot and close to save
                 plt.close(dam_i.plot_map())  # Plot and close to save
                 plt.close(dam_i.plot_water_surface())  # Plot and close to save
-                print("Onto the next one! :)")
 
             except ValueError as e:
                 if "Invalid flow conditions" in str(e):
