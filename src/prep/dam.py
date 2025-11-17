@@ -1,7 +1,7 @@
 import os
 import ast
 import pandas as pd
-from ..core import hydroinformatics as hi
+from core import hydroinformatics as hi
 from .download_dem import download_dem
 from .dem_baseflow import est_dem_baseflow
 from .download_flowline import download_NHDPlus, download_TDXHYDRO
