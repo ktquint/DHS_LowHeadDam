@@ -155,9 +155,9 @@ def threaded_prepare_data():
     try:
         # --- 1. Get all values from GUI ---
         lhd_csv = prep_database_entry.get()
-        flowline = prep_flowline_var.get()
+        flowline_source = prep_flowline_var.get()
         dem_resolution = prep_dd_var.get()
-        streamflow = prep_streamflow_var.get()
+        streamflow_source = prep_streamflow_var.get()
         dem_folder = prep_dem_entry.get()
         strm_folder = prep_strm_entry.get()
         results_folder = prep_results_entry.get()
@@ -167,7 +167,7 @@ def threaded_prepare_data():
             messagebox.showerror("Error", f"Database file not found:\n{lhd_csv}")
             return
         if not all(
-                [lhd_csv, flowline, dem_resolution, streamflow, dem_folder, strm_folder, results_folder]):
+                [lhd_csv, flowline_source, dem_resolution, streamflow_source, dem_folder, strm_folder, results_folder]):
             messagebox.showwarning("Missing Info", "Please fill out all path and setting fields.")
             return
 
@@ -208,7 +208,7 @@ def threaded_prepare_data():
         vpu_filename = "vpu-boundaries.gpkg"
         tdx_vpu_map = os.path.join(data_dir, vpu_filename)
 
-        if streamflow == 'National Water Model':
+        if streamflow_source == 'National Water Model':
             # --- check if nwm parquet file exists --- #
             if not os.path.exists(nwm_parquet):
                 try:
@@ -251,7 +251,7 @@ def threaded_prepare_data():
                     status_var.set("Error: Could not load NWM dataset.")
                     nwm_ds = None
 
-        elif streamflow == 'GEOGLOWS' or flowline == 'GEOGLOWS':
+        elif streamflow_source == 'GEOGLOWS' or flowline_source == 'GEOGLOWS':
             if not os.path.exists(tdx_vpu_map):
                 # File is missing, let's download it from HydroShare
                 try:
@@ -294,8 +294,8 @@ def threaded_prepare_data():
                 status_var.set(f"Prep: Dam {dam_id} ({i + 1} of {total_dams})...")
 
                 dam = PrepDam(**row.to_dict())
-                dam.assign_hydrology(streamflow)
-                dam.assign_hydrography(flowline)
+                dam.set_streamflow_source(streamflow_source)
+                dam.set_flowline_source(flowline_source)
 
                 status_var.set(f"Dam {dam_id}: Assigning flowlines...")
 
@@ -311,18 +311,18 @@ def threaded_prepare_data():
                     status_var.set(f"Dam {dam_id}: DEM failed. Skipping.")
                     continue
 
-                dam.assign_output(results_folder)
+                dam.set_output_dir(results_folder)
 
                 needs_reach = False
-                if streamflow == 'National Water Model':
+                if streamflow_source == 'National Water Model':
                     if pd.isna(row.get('dem_baseflow_NWM')) or pd.isna(row.get('fatality_flows_NWM')):
                         needs_reach = True
-                elif streamflow == 'GEOGLOWS':
+                elif streamflow_source == 'GEOGLOWS':
                     if pd.isna(row.get('dem_baseflow_GEOGLOWS')) or pd.isna(row.get('fatality_flows_GEOGLOWS')):
                         needs_reach = True
 
                 if needs_reach:
-                    if streamflow == 'National Water Model' and nwm_ds is None:
+                    if streamflow_source == 'National Water Model' and nwm_ds is None:
                         print(f"Skipping flow estimation for Dam No. {dam_id}: NWM dataset not loaded.")
                     else:
                         status_var.set(f"Dam {dam_id}: Creating stream reach...")
@@ -366,10 +366,7 @@ def threaded_prepare_data():
             json_loc = prep_json_entry.get()
 
             # This function now also returns the dam dictionaries
-            if streamflow == 'National Water Model':
-                cj.rathcelon_input(lhd_csv, json_loc, flowline, streamflow, nwm_parquet)
-            else:
-                cj.rathcelon_input(lhd_csv, json_loc, flowline, streamflow)
+            cj.rathcelon_input(lhd_csv, json_loc, nwm_parquet)
 
             status_var.set(f"Data preparation complete. {processed_dams_count} dams prepped.")
             messagebox.showinfo("Success", f"Data preparation complete.\n{processed_dams_count} dams processed.\n"

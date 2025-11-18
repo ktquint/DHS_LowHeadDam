@@ -2,7 +2,7 @@ import json
 import pandas as pd
 
 
-def rathcelon_input(lhd_csv, output_loc, hydrography, hydrology, nwm_parquet=None):
+def rathcelon_input(lhd_csv, output_loc, nwm_parquet=None):
     lhd_df = pd.read_csv(lhd_csv)
     dams = []
     for index, row in lhd_df.iterrows():
@@ -10,6 +10,9 @@ def rathcelon_input(lhd_csv, output_loc, hydrography, hydrology, nwm_parquet=Non
         dam_csv = lhd_csv
         dam_id_field = "ID"
         dam_id = row["ID"]
+        hydrography = row["hydrography"]
+        hydrology = row["hydrology"]
+
 
         if hydrography == "GEOGLOWS":
             flowline = row["flowline_TDX"]
@@ -27,8 +30,10 @@ def rathcelon_input(lhd_csv, output_loc, hydrography, hydrology, nwm_parquet=Non
         output_dir = row["output_dir"]
 
         if hydrology == "GEOGLOWS":
+            streamflow = row["flowline_TDX"]
             known_baseflow = row['dem_baseflow_GEOGLOWS']
         else:
+            streamflow = nwm_parquet
             known_baseflow = row['dem_baseflow_NWM']
 
         # Check if known_baseflow is a string or NaN (which is not valid JSON)
@@ -48,7 +53,7 @@ def rathcelon_input(lhd_csv, output_loc, hydrography, hydrology, nwm_parquet=Non
                     "find_banks_based_on_landcover": False,
                     "create_reach_average_curve_file": False,
                     "known_baseflow": known_baseflow,
-                    "flow_parquet_file": nwm_parquet}
+                    "streamflow": streamflow}
         dams.append(dam_dict)
 
     input_data = {"dams": dams}

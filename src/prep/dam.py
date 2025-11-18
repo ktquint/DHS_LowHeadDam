@@ -65,8 +65,9 @@ class Dam:
         if self.hydrography == 'NHDPlus':
             self.flowline_NHD = download_NHDPlus(self.latitude, self.longitude, flowline_dir)
 
-        elif self.hydrography == 'GEOGLOWS':
+        if self.hydrography == 'GEOGLOWS' or self.hydrology == 'GEOGLOWS':
             self.flowline_TDX = download_TDXHYDRO(self.latitude, self.longitude, flowline_dir, VPU_gpkg)
+
 
     def assign_dem(self, dem_dir, resolution):
         # Call download_dem, which now returns resolution_meters
@@ -107,6 +108,7 @@ class Dam:
                 self.dem_10m = dem_subdir
         else:
             print(f"DEM assignment failed for Dam {self.ID}.")
+
 
     def create_reach(self, nwm_ds=None, tdx_vpu_map=None):
         """
@@ -209,20 +211,21 @@ class Dam:
                 self.fatality_flows_GEOGLOWS = fatality_flows_kept
 
 
-    def assign_output(self, output_dir: str):
+    def set_output_dir(self, output_dir: str):
         self.output_dir = output_dir
 
 
-    def assign_hydrology(self, hydrology: str):
+    def set_streamflow_source(self, hydrology: str):
         self.hydrology = hydrology
 
 
-    def assign_hydrography(self, hydrography: str):
+    def set_flowline_source(self, hydrography: str):
         self.hydrography = hydrography
 
 
     def assign_reach(self, stream_reach):
         self.dam_reach = stream_reach
+
 
     def fdc_to_csv(self) -> None:
         fdc_results = self.dam_reach.export_fdcs()
