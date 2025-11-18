@@ -45,13 +45,13 @@ This guide provides instructions for setting up the required environment using C
     * From the same terminal, navigate *inside* the project's `src` folder. This is critical for the script to find its helper files.
         ```bash
         # If you are in the main project folder:
-        cd src
+        cd lhd_processor
         ```
 
 3.  **Run the Processor:**
     * Now, simply run the python script to launch the GUI:
         ```bash
-        python lhd_processor.py
+        python __main__.py
         ```
 
 4.  **Deactivate (When you are done):**

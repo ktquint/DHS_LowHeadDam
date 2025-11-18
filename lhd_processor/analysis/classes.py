@@ -508,7 +508,7 @@ class Dam:
             print(f"Value read from CSV: '{baseflow_val}' (Type: {type(baseflow_val)})")
             print("This dam cannot be processed.")
             print(f"---" * 20)
-            # Re-raise the error to be caught by lhd_processor.py
+            # Re-raise the error to be caught by __main__.py
             raise ValueError(f"Invalid baseflow value '{baseflow_val}' for Dam {self.id}")
 
         # ---------------------------------- READ IN VDT + CROSS-SECTION INFO ---------------------------------------- #
@@ -555,7 +555,7 @@ class Dam:
 
                 P_i = dam_height(self.known_baseflow, self.weir_length, delta_wse_i, y_i)  # , z_i)
                 if P_i < 0.1 or P_i > 100:
-                    # Raise an error that lhd_processor.py will catch, causing it to skip this dam
+                    # Raise an error that __main__.py will catch, causing it to skip this dam
                     raise ValueError(f"Invalid flow conditions: Calculated dam height ({P_i:.2f}m) is unrealistic.")
                 self.cross_sections[i].set_dam_height(P_i)
 
