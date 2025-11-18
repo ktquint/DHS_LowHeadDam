@@ -1,7 +1,7 @@
 import os
 import ast
 import pandas as pd
-import hydroinformatics as hi
+from .hydroinformatics import StreamReach
 from .download_dem import download_dem
 from .dem_baseflow import est_dem_baseflow
 from .download_flowline import download_NHDPlus, download_TDXHYDRO
@@ -134,7 +134,7 @@ class Dam:
                 print(f"Warning: GEOGLOWS source selected for Dam {self.ID} but VPU map path not found.")
 
         # 3. Create the StreamReach object with correct flags
-        self.dam_reach = hi.StreamReach(
+        self.dam_reach = StreamReach(
             lhd_id=self.ID,
             latitude=self.latitude,
             longitude=self.longitude,

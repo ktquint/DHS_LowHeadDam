@@ -15,7 +15,7 @@ import numpy as np  # numerical computing with support for arrays, matrices, and
 import pandas as pd  # data analysis and manipulation tool; reads in CSV, TXT, XLSX files
 import geopandas as gpd  # extends pandas for working with geospatial vector data (points, lines, polygons)
 import contextily as ctx  # adds basemaps (e.g., OpenStreetMap) to geospatial plots, often used with geopandas
-import hydraulics as hyd
+from .hydraulics import compute_flip_and_conjugate, dam_height
 import matplotlib.pyplot as plt  # creates static, animated, and interactive plots and graphs
 from matplotlib.axes import Axes
 from scipy.optimize import fsolve  # math ig ;)
@@ -50,7 +50,7 @@ def rating_curve_intercept(Q: float, L: float, P: float, a: float, b: float, whi
     """
         write something here... :0
     """
-    y_flip, y_2 = hyd.compute_flip_and_conjugate(Q, L, P)
+    y_flip, y_2 = compute_flip_and_conjugate(Q, L, P)
     y_t = a * Q ** b
     if which == 'flip':
         return y_flip - y_t
@@ -336,7 +336,7 @@ class CrossSection:
         Y_Conjugates = []
 
         for Q in Qs:
-            Y_Flip, Y_Conj = hyd.compute_flip_and_conjugate(Q, self.L, self.P)
+            Y_Flip, Y_Conj = compute_flip_and_conjugate(Q, self.L, self.P)
             Y_Flips.append(Y_Flip)
             Y_Conjugates.append(Y_Conj)
 
@@ -553,7 +553,7 @@ class Dam:
                 # z_i = -1 * self.cross_sections[i].slope * self.cross_sections[i].distance
                 # ths one has delta z = 0
 
-                P_i = hyd.dam_height(self.known_baseflow, self.weir_length, delta_wse_i, y_i)  # , z_i)
+                P_i = dam_height(self.known_baseflow, self.weir_length, delta_wse_i, y_i)  # , z_i)
                 if P_i < 0.1 or P_i > 100:
                     # Raise an error that lhd_processor.py will catch, causing it to skip this dam
                     raise ValueError(f"Invalid flow conditions: Calculated dam height ({P_i:.2f}m) is unrealistic.")
@@ -567,7 +567,7 @@ class Dam:
                     y_t = self.cross_sections[i].a * flow ** self.cross_sections[i].b
 
                     # calc conj. and flip using Leuthusser eq.s
-                    y_flip, y_2 = hyd.compute_flip_and_conjugate(flow, self.weir_length, P_i)
+                    y_flip, y_2 = compute_flip_and_conjugate(flow, self.weir_length, P_i)
 
                     # add those depths to their respective lists
                     y_ts.append(float(y_t))
@@ -579,7 +579,7 @@ class Dam:
                 for flow in self.fatal_flows:
                     # calc. tailwater w/ power func.
                     y_t = self.cross_sections[i].a * flow ** self.cross_sections[i].b
-                    y_flip, y_2 = hyd.compute_flip_and_conjugate(flow, self.weir_length, self.P)
+                    y_flip, y_2 = compute_flip_and_conjugate(flow, self.weir_length, self.P)
                     y_ts.append(float(y_t))
                     y_flips.append(float(y_flip))
                     y_2s.append(float(y_2))
