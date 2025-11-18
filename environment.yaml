@@ -19,10 +19,12 @@ dependencies:
   - hsclient
   - laspy
   - contextily
-  - pyarrow
 
   # External Packages (installed via pip from GitHub)
   - pip:
+    - geoglows
+    - pyarrow
+    - matplotlib_scalebar
     - git+https://github.com/jlgutenson/rathcelon.git
     - git+https://github.com/MikeFHS/automated-rating-curve.git
-    - geoglows
+
