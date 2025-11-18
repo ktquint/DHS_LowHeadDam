@@ -337,14 +337,13 @@ def threaded_prepare_data():
                 dam.fdc_to_csv()
 
                 for key, value in dam.__dict__.items():
-                    if key in final_df.columns:
-                        # Check if the value is a list or numpy array
-                        if isinstance(value, (list, np.ndarray)):
-                            # Convert it to a string representation before saving
-                            final_df.loc[i, key] = str(value)
-                        else:
-                            # Otherwise, assign it directly
-                            final_df.loc[i, key] = value
+                    # Check if the value is a list or numpy array
+                    if isinstance(value, (list, np.ndarray)):
+                        # Convert it to a string representation before saving
+                        final_df.loc[i, key] = str(value)
+                    else:
+                        # Otherwise, assign it directly
+                        final_df.loc[i, key] = value
 
                 processed_dams_count += 1
                 print(f'Finished Prep for Dam No. {dam_id}')
