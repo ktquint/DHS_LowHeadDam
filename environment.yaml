@@ -14,9 +14,15 @@ dependencies:
   - xarray
   - rasterio
   - scipy
-  - openpyxl  # For pd.read_excel()
+  - openpyxl
+  - gdal
+  - hsclient
+  - laspy
+  - contextily
+  - pyarrow
 
   # External Packages (installed via pip from GitHub)
   - pip:
     - git+https://github.com/jlgutenson/rathcelon.git
     - git+https://github.com/MikeFHS/automated-rating-curve.git
+    - geoglows
