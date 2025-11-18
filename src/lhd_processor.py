@@ -1125,7 +1125,7 @@ ttk.Button(analysis_path_frame, text="Select Results Folder", command=select_ana
 analysis_results_entry = ttk.Entry(analysis_path_frame)
 analysis_results_entry.grid(row=1, column=1, padx=5, pady=5, sticky=tk.EW)
 
-ttk.Label(analysis_path_frame, text="Hydrologic Data Source:").grid(row=2, column=0, padx=5, pady=5, sticky=tk.W)
+ttk.Label(analysis_path_frame, text="Streamflow Source:").grid(row=2, column=0, padx=5, pady=5, sticky=tk.W)
 analysis_model_var = tk.StringVar(value="National Water Model")
 analysis_model_dropdown = ttk.Combobox(analysis_path_frame, textvariable=analysis_model_var, state="readonly",
                                        values=("USGS", "GEOGLOWS", "National Water Model"))
