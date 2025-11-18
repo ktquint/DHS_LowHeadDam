@@ -8,6 +8,8 @@ from tkinter import ttk, filedialog, messagebox
 import numpy as np
 import pandas as pd
 import geopandas as gpd
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from hsclient import HydroShare
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
