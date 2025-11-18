@@ -1182,7 +1182,7 @@ ttk.Checkbutton(analysis_figure_frame, text="Flow-Duration Curve", variable=anal
                                                                                                        padx=5, pady=2,
                                                                                                        sticky=tk.W)
 
-# --- NEW: Bar Chart Checkbox ---
+# --- Bar Chart Checkbox ---
 analysis_display_bar_chart = tk.BooleanVar(value=False)
 ttk.Checkbutton(analysis_figure_frame, text="Generate Bar Chart (all dams)",
                 variable=analysis_display_bar_chart).grid(row=3,
@@ -1190,14 +1190,14 @@ ttk.Checkbutton(analysis_figure_frame, text="Generate Bar Chart (all dams)",
                                                           padx=5, pady=2,
                                                           sticky=tk.W)
 
-# --- Analysis: NEW Display Button ---
+# --- Analysis: Display Button ---
 analysis_display_button_frame = ttk.Frame(analysis_tab)
 analysis_display_button_frame.pack(pady=10, fill=tk.X, padx=10, side=tk.TOP)
 analysis_display_button = ttk.Button(analysis_display_button_frame, text="4. Generate & Display Dam Figures",
                                      command=start_display_dam_figures_thread, style="Accent.TButton")
 analysis_display_button.pack(fill=tk.X, ipady=5)
 
-# --- Analysis: NEW Figure Viewer Frame ---
+# --- Analysis: Figure Viewer Frame ---
 analysis_figure_viewer_frame = ttk.LabelFrame(analysis_tab, text="Figure Viewer")
 # This frame is packed at the end, but its content is filled by functions
 
