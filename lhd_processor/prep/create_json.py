@@ -2,7 +2,7 @@ import json
 import pandas as pd
 
 
-def rathcelon_input(lhd_csv, output_loc, nwm_parquet=None):
+def rathcelon_input(lhd_csv, output_loc, baseflow_method, nwm_parquet=None):
     lhd_df = pd.read_csv(lhd_csv)
     dams = []
     for index, row in lhd_df.iterrows():
@@ -22,6 +22,12 @@ def rathcelon_input(lhd_csv, output_loc, nwm_parquet=None):
                 break
 
         output_dir = row["output_dir"]
+
+        if baseflow_method == "WSE and LiDar Date" or baseflow_method == "WSE and Median Daily Flow":
+            use_banks = False
+        else:
+            use_banks = True
+
 
         if hydrology == "GEOGLOWS" and hydrography == "NHDPlus":
             flowline = row["flowline_NHD"]
@@ -51,7 +57,7 @@ def rathcelon_input(lhd_csv, output_loc, nwm_parquet=None):
                     "dam_id": dam_id,
                     "flowline": flowline,
                     "dem_dir": dem_dir,
-                    "bathy_use_banks": False,
+                    "bathy_use_banks": use_banks,
                     "output_dir": output_dir,
                     "process_stream_network": True,
                     "find_banks_based_on_landcover": False,

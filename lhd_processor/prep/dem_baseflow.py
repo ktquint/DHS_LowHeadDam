@@ -186,7 +186,7 @@ def find_water_gpstime(lat, lon):
         return None
 
 
-def est_dem_baseflow(stream_reach, source):
+def est_dem_baseflow(stream_reach, source, method):
     """
         finds baseflow for a dem along a stream reach
     """
@@ -196,18 +196,26 @@ def est_dem_baseflow(stream_reach, source):
 
     # get the date range of the lidar data
     # dem_dates = get_dem_dates(lat, lon)
-    lidar_gpstime = find_water_gpstime(lat, lon)
+    if method == "WSE and LiDar Date":
+        lidar_gpstime = find_water_gpstime(lat, lon)
 
-    gpstime_date = None
-    if lidar_gpstime:
-        gpstime_date = gpstime_to_date(lidar_gpstime)
+        gpstime_date = None
+        if lidar_gpstime:
+            gpstime_date = gpstime_to_date(lidar_gpstime)
 
-    # use the date range to estimate the baseflow
-    if not gpstime_date:  # if no dates given, just use the median flow
-        print("No available LiDAR data, so we'll just assume it was an average day...")
+        # use the date range to estimate the baseflow
+        if not gpstime_date:  # if no dates given, just use the median flow
+            print("No available LiDAR data, so we'll just assume it was an average day...")
+            dem_baseflow = stream_reach.get_median_flow(source)
+        else:  # if there are dates, use them lol
+            print("We got some Lidar data, now we gotta estimate the flow that day...")
+            dem_baseflow = stream_reach.get_flow_on_date(gpstime_date, source)
+        print(f'The baseflow estimate is {dem_baseflow} cms')
+
+    elif method == "WSE and Median Daily Flow":
         dem_baseflow = stream_reach.get_median_flow(source)
-    else:  # if there are dates, use them lol
-        print("We got some Lidar data, now we gotta estimate the flow that day...")
-        dem_baseflow = stream_reach.get_flow_on_date(gpstime_date, source)
-    print(f'The baseflow estimate is {dem_baseflow} cms')
+
+    else: # method == 2-yr Q and banks
+        dem_baseflow = stream_reach.get_2yr_return_period(source)
+
     return dem_baseflow

@@ -154,6 +154,43 @@ class StreamReachBase:
         filtered_df = df.loc[start_date:end_date]
         return float(filtered_df['flow_cms'].median()) if not filtered_df.empty else np.nan
 
+    def get_2yr_return_period(self, source: str) -> float:
+        """
+        Calculates the 2-year return period discharge (Q2) using the
+        Annual Maximum Series method.
+
+        The 2-year flood is defined as the flow magnitude exceeded with
+        50% probability in any given year, which corresponds to the
+        median of the annual maximums.
+        """
+        df = self._get_source_df(source)
+        if df is None or df.empty:
+            print(f"Dam {self.id}: No data available for source: {source} to calc Q2")
+            return np.nan
+
+        # 1. Check for sufficient data (at least 2 full years recommended)
+        time_span_days = (df.index.max() - df.index.min()).days
+        if time_span_days < 365 * 2:
+            print(f"Dam {self.id}: Insufficient data length ({time_span_days} days) for return period analysis.")
+            return np.nan
+
+        # 2. Resample to Water Years (Oct 1 start) to avoid splitting winter seasons
+        # 'AS-OCT' = Annual Start in October
+        # noinspection PyBroadException
+        try:
+            annual_max_series = df['flow_cms'].resample('AS-OCT').max()
+        except Exception:
+            # Fallback for older pandas versions or non-datetime indices
+            annual_max_series = df['flow_cms'].resample('A').max()
+
+        if annual_max_series.empty:
+            return np.nan
+
+        # 3. Calculate Q2 (Median of Annual Maxima)
+        q2 = annual_max_series.median()
+
+        return float(q2)
+
     def plot_hydrographs(self):
         """Plots a hydrograph for each available data source."""
         for source in self.data_sources:

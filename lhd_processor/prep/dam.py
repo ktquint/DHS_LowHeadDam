@@ -145,7 +145,7 @@ class Dam:
         )
 
 
-    def set_dem_baseflow(self):
+    def set_dem_baseflow(self, baseflow_method):
         """
             estimates the DEM baseflow if it hasn't been calculated yet...
         """
@@ -164,7 +164,7 @@ class Dam:
 
             if pd.isna(current_value):
                 print(f"{baseflow_attr} is not set. Calling estimation function for Dam ID: {self.ID}")
-                baseflow = est_dem_baseflow(self.dam_reach, self.hydrology)
+                baseflow = est_dem_baseflow(self.dam_reach, self.hydrology, baseflow_method)
                 # Set the attribute (e.g., self.dem_baseflow_NWM = baseflow)
                 setattr(self, baseflow_attr, baseflow)
             else:

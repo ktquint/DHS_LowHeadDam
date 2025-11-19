@@ -214,6 +214,7 @@ def threaded_prepare_data():
         dem_folder = prep_dem_entry.get()
         strm_folder = prep_strm_entry.get()
         results_folder = prep_results_entry.get()
+        baseflow_method = prep_baseflow_var.get()
 
         # --- 2. Validate inputs ---
         if not os.path.exists(lhd_csv):
@@ -382,7 +383,7 @@ def threaded_prepare_data():
                         dam.create_reach(nwm_ds, dam.flowline_TDX)
 
                         status_var.set(f"Dam {dam_id}: Estimating baseflow...")
-                        dam.set_dem_baseflow()
+                        dam.set_dem_baseflow(baseflow_method)
 
                         status_var.set(f"Dam {dam_id}: Estimating fatal flows...")
                         dam.set_fatal_flows()
@@ -418,7 +419,7 @@ def threaded_prepare_data():
             json_loc = prep_json_entry.get()
 
             # This function now also returns the dam dictionaries
-            cj.rathcelon_input(lhd_csv, json_loc, nwm_parquet)
+            cj.rathcelon_input(lhd_csv, json_loc, baseflow_method, nwm_parquet)
 
             status_var.set(f"Data preparation complete. {processed_dams_count} dams prepped.")
             messagebox.showinfo("Success", f"Data preparation complete.\n{processed_dams_count} dams processed.\n"
