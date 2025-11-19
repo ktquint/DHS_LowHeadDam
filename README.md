@@ -27,7 +27,32 @@ This guide provides instructions for setting up the required environment using C
 
 ---
 
-## 2. How to Run the Program (Do this every time)
+## 2. Project Directory Organization (Do this once per project)
+
+To use the LHD Processor effectively, it is recommended to set up a dedicated folder for your project. The application is designed to auto-populate paths based on this structure.
+
+### Recommended Structure
+Create a folder (e.g., `My_Dam_Project`) and place your input CSV file inside it. When you run the application and select this "Project Folder" in the GUI, the tool will automatically create the standard subdirectories for you.
+
+```text
+My_Dam_Project/
+│
+├── my_dams_database.csv   <-- Your required input file
+│
+├── LHD_Results/           <-- Auto-generated: Stores DEMs, analysis outputs, and figures
+│   ├── [Dam_ID]/
+│   │   ├── DEM/
+│   │   ├── FIGS/
+│   │   └── ...
+│
+├── LHD_STRMs/             <-- Auto-generated: Stores downloaded flowline data (NHD/GEOGLOWS)
+│
+└── my_dams_database.json  <-- Auto-generated: Input file created for the RathCelon step
+```
+
+---
+
+## 3. How to Run the Program (Do this every time)
 
 1.  **Activate the Environment:**
     * Open your terminal (Anaconda Prompt on Windows, Terminal on macOS).
