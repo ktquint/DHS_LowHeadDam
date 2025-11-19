@@ -13,12 +13,6 @@ def rathcelon_input(lhd_csv, output_loc, nwm_parquet=None):
         hydrography = row["hydrography"]
         hydrology = row["hydrology"]
 
-
-        if hydrography == "GEOGLOWS":
-            flowline = row["flowline_TDX"]
-        else:
-            flowline = row["flowline_NHD"]
-
         res_order = ['dem_1m', 'dem_3m', 'dem_10m']
         dem_dir = None
         for res in res_order:
@@ -29,10 +23,20 @@ def rathcelon_input(lhd_csv, output_loc, nwm_parquet=None):
 
         output_dir = row["output_dir"]
 
-        if hydrology == "GEOGLOWS":
+        if hydrology == "GEOGLOWS" and hydrography == "NHDPlus":
+            flowline = row["flowline_NHD"]
             streamflow = row["flowline_TDX"]
             known_baseflow = row['dem_baseflow_GEOGLOWS']
-        else:
+        elif hydrology == "GEOGLOWS" and hydrography == "GEOGLOWS":
+            flowline = row["flowline_TDX"]
+            streamflow = None
+            known_baseflow = row['dem_baseflow_GEOGLOWS']
+        elif hydrology == "National Water Model" and hydrography == "NHDPlus":
+            flowline = row["flowline_NHD"]
+            streamflow = nwm_parquet
+            known_baseflow = row['dem_baseflow_NWM']
+        else: # hydrology == "National Water Model" and hydrography == "GEOGLOWS"
+            flowline = row["flowline_TDX"]
             streamflow = nwm_parquet
             known_baseflow = row['dem_baseflow_NWM']
 

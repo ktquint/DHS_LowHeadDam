@@ -5,6 +5,7 @@ dependencies:
   # Core Python
   - python=3.10
   - pip
+  - setuptools<70
 
   # Scientific & GIS Packages (from conda-forge for stability)
   - geopandas
@@ -16,7 +17,6 @@ dependencies:
   - scipy
   - openpyxl
   - gdal
-  - hsclient
   - laspy
   - contextily
 
@@ -25,6 +25,7 @@ dependencies:
     - geoglows
     - pyarrow
     - matplotlib_scalebar
+    - hsclient
     - git+https://github.com/jlgutenson/rathcelon.git
     - git+https://github.com/MikeFHS/automated-rating-curve.git
 
