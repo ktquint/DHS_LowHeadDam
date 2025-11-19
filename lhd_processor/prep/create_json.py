@@ -41,7 +41,7 @@ def rathcelon_input(lhd_csv, output_loc, baseflow_method, nwm_parquet=None):
             streamflow = nwm_parquet
             known_baseflow = row['dem_baseflow_NWM']
 
-        if baseflow_method == "WSE and LiDar Date" or baseflow_method == "WSE and Median Daily Flow":
+        if baseflow_method == "WSE and LiDAR Date" or baseflow_method == "WSE and Median Daily Flow":
             use_banks = False
         else:
             use_banks = True

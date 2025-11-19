@@ -178,7 +178,7 @@ class StreamReachBase:
         # 'AS-OCT' = Annual Start in October
         # noinspection PyBroadException
         try:
-            annual_max_series = df['flow_cms'].resample('AS-OCT').max()
+            annual_max_series = df['flow_cms'].resample('YS-OCT').max()
         except Exception:
             # Fallback for older pandas versions or non-datetime indices
             annual_max_series = df['flow_cms'].resample('A').max()
