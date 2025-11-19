@@ -18,7 +18,6 @@ dependencies:
   - openpyxl
   - gdal
   - laspy
-  - lazrs
   - contextily
 
   # External Packages (installed via pip from GitHub)
@@ -27,6 +26,7 @@ dependencies:
     - pyarrow
     - matplotlib_scalebar
     - hsclient
+    - lazrs
     - git+https://github.com/jlgutenson/rathcelon.git
     - git+https://github.com/MikeFHS/automated-rating-curve.git
 
