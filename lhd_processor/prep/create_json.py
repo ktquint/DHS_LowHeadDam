@@ -28,18 +28,22 @@ def rathcelon_input(lhd_csv, output_loc, baseflow_method, nwm_parquet=None):
             flowline = row["flowline_NHD"]
             streamflow = row["flowline_TDX"]
             known_baseflow = row['dem_baseflow_GEOGLOWS']
+
         elif hydrology == "GEOGLOWS" and hydrography == "GEOGLOWS":
             flowline = row["flowline_TDX"]
             streamflow = None
             known_baseflow = row['dem_baseflow_GEOGLOWS']
+
         elif hydrology == "National Water Model" and hydrography == "NHDPlus":
             flowline = row["flowline_NHD"]
             streamflow = nwm_parquet
             known_baseflow = row['dem_baseflow_NWM']
+
         else: # hydrology == "National Water Model" and hydrography == "GEOGLOWS"
             flowline = row["flowline_TDX"]
             streamflow = nwm_parquet
             known_baseflow = row['dem_baseflow_NWM']
+
 
         if baseflow_method == "WSE and LiDAR Date" or baseflow_method == "WSE and Median Daily Flow":
             use_banks = False

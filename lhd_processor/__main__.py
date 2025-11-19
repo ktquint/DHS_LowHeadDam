@@ -304,7 +304,7 @@ def threaded_prepare_data():
                     status_var.set("Error: Could not load NWM dataset.")
                     nwm_ds = None
 
-        elif streamflow_source == 'GEOGLOWS' or flowline_source == 'GEOGLOWS':
+        if streamflow_source == 'GEOGLOWS' or flowline_source == 'GEOGLOWS':
             if not os.path.exists(tdx_vpu_map):
                 # File is missing, let's download it from HydroShare
                 try:
