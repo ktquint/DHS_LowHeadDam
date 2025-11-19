@@ -256,6 +256,7 @@ def threaded_prepare_data():
         # Get the absolute path to the directory containing __main__.py (which is now in lhd_processor/)
         script_dir = os.path.dirname(os.path.realpath(__file__))
         data_dir = os.path.join(script_dir, 'data')
+        os.makedirs(data_dir, exist_ok=True)
         # Join that directory path with the relative path to your file
         nwm_parquet = os.path.join(data_dir, 'nwm_daily_retrospective.parquet')
         # if we want the GEOGLOWS streamflow, we'll need to also download the GEOGLOWS flowlines
@@ -270,15 +271,12 @@ def threaded_prepare_data():
                                         "The NWM Parquet file is missing.\n"
                                         "The program will now download it from HydroShare.\n"
                                         "This may take a moment.")
-                    # let's make the dir then
-                    data_path = os.path.join(script_dir, 'data')
-                    os.makedirs(data_path, exist_ok=True)
 
                     # download the parquet
                     hs = HydroShare()
                     resource = hs.resource(hydroshare_id)
                     resource.file_download(path='nwm_daily_retrospective.parquet',
-                                           save_path=nwm_parquet)
+                                           save_path=data_dir)
                     status_var.set("NWM Parquet download complete.")
 
                 except Exception as e:
