@@ -18,6 +18,7 @@ dependencies:
   - openpyxl
   - gdal
   - laspy
+  - lazrs
   - contextily
 
   # External Packages (installed via pip from GitHub)
