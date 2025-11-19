@@ -23,11 +23,6 @@ def rathcelon_input(lhd_csv, output_loc, baseflow_method, nwm_parquet=None):
 
         output_dir = row["output_dir"]
 
-        if baseflow_method == "WSE and LiDar Date" or baseflow_method == "WSE and Median Daily Flow":
-            use_banks = False
-        else:
-            use_banks = True
-
 
         if hydrology == "GEOGLOWS" and hydrography == "NHDPlus":
             flowline = row["flowline_NHD"]
@@ -45,6 +40,12 @@ def rathcelon_input(lhd_csv, output_loc, baseflow_method, nwm_parquet=None):
             flowline = row["flowline_TDX"]
             streamflow = nwm_parquet
             known_baseflow = row['dem_baseflow_NWM']
+
+        if baseflow_method == "WSE and LiDar Date" or baseflow_method == "WSE and Median Daily Flow":
+            use_banks = False
+        else:
+            use_banks = True
+            known_baseflow = None
 
         # Check if known_baseflow is a string or NaN (which is not valid JSON)
         # and convert it to None (which becomes 'null' in JSON)

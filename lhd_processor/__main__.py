@@ -249,6 +249,7 @@ def threaded_prepare_data():
         except Exception as e:
             print(f"Warning: Could not pre-set DataFrame dtypes: {e}")
 
+        # kenny's hydroshare ID
         hydroshare_id = "88759266f9c74df8b5bb5f52d142ba8e"
 
         # --- 4. Load NWM or GEOGLOWS data once --- #
