@@ -322,7 +322,7 @@ def threaded_prepare_data():
 
                     # Pass the *directory* to save_path, not the full file path
                     resource.file_download(path=vpu_filename,
-                                           save_path=tdx_vpu_map)
+                                           save_path=data_dir)
 
                     status_var.set("VPU map download complete.")
 
