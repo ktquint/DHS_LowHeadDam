@@ -11,6 +11,7 @@ import os  # interacts with the operating system (e.g., file paths, directories)
 import ast  # safely parses Python code or literals (e.g., safe string-to-list conversion)
 import math  # Standard math functions (trigonometry, logarithms, rounding, etc.)
 import pyproj  # handles CRS conversions
+import geoglows
 import numpy as np  # numerical computing with support for arrays, matrices, and math functions
 import pandas as pd  # data analysis and manipulation tool; reads in CSV, TXT, XLSX files
 import geopandas as gpd  # extends pandas for working with geospatial vector data (points, lines, polygons)
@@ -393,30 +394,52 @@ class CrossSection:
         Q_max = fsolve(rating_curve_intercept, Q_i, args=(self.L, self.P, self.a, self.b, 'flip'))[0]
         return Q_min * 35.315, Q_max * 35.315
 
+
     def plot_fdc(self, ax: Axes):
-        results_dir = os.path.dirname(self.fig_dir)
+        # 1. Fetch flow data dynamically from parent Dam
+        flow_data = self.parent_dam.get_flow_data()
 
-        # read in the csv and plot the fdc data
+        if flow_data is None or flow_data.empty:
+            print(f"No flow data available to plot FDC for Dam {self.id}")
+            return
 
-        fdc_csv = os.path.join(results_dir, 'FLOW', f'{self.id}_{self.hydrology}_FDC.csv')
-        fdc_df = pd.read_csv(fdc_csv)
-        fdc_df['Flow (cfs)'] = fdc_df['Flow (cms)'] * 35.315
+        # 2. Prepare FDC (Convert to cfs, sort, calculate exceedance)
+        # Drop NaNs and get values
+        flow_cms = flow_data.dropna().values
+        flow_cfs = flow_cms * 35.315
+
+        # Sort flows descending
+        sorted_flow = np.sort(flow_cfs)[::-1]
+
+        # Calculate exceedance probability (Weibull plotting position)
+        n = len(sorted_flow)
+        exceedance = 100 * np.arange(1, n + 1) / (n + 1)
+
+        # Create a temporary DataFrame for the plotting and intersection helper
+        fdc_df = pd.DataFrame({
+            'Exceedance (%)': exceedance,
+            'Flow (cfs)': sorted_flow
+        })
+
+        # 3. Plot the FDC
         ax.plot(fdc_df['Exceedance (%)'], fdc_df['Flow (cfs)'], label='FDC', color='dodgerblue')
 
-        # plot the vertical lines where the dangerous depths are
+        # 4. Calculate and Plot Intersections (Flip/Conjugate)
         Q_conj, Q_flip = self._y_dangerous()
+
+        # Use existing helper function with our new dynamic DataFrame
         P_flip = get_prob_from_Q(Q_flip, fdc_df)
         P_conj = get_prob_from_Q(Q_conj, fdc_df)
 
         ax.axvline(x=P_flip, color='black', linestyle='--', label=f'Flip and Conjugate Depth Intersections')
         ax.axvline(x=P_conj, color='black', linestyle='--')
 
-        # format the figure
+        # 5. Format the figure
         ax.set_ylabel('Discharge (cfs)')
         ax.set_yscale("log")
         ax.set_xlabel('Exceedance Probability (%)')
         ax.set_title(f'Flow-Duration Curve for Low-Head Dam No. {self.id}')
-        ax.grid(True)
+        ax.grid(True, which="both", linestyle='--')  # Improved grid for log scale
         ax.legend()
 
     def create_combined_fdc(self):
@@ -439,13 +462,36 @@ class Dam:
         self.id = int(lhd_id)
         self.hydrology = hydrology
         lhd_df = pd.read_csv(lhd_csv)
-
         id_row = lhd_df[lhd_df['ID'] == self.id].reset_index(drop=True)
 
         # create a folder to store figures...
         self.results_dir = base_results_dir
         self.fig_dir = os.path.join(self.results_dir, str(self.id), "FIGS")
         os.makedirs(self.fig_dir, exist_ok=True)
+
+        try:
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            project_root = os.path.dirname(current_dir)  # Go up to lhd_processor/
+            comid_path = os.path.join(project_root, 'data', 'comid_table.csv')
+
+            self.nwm_id = None
+            self.geoglows_id = None
+
+            if os.path.exists(comid_path):
+                comid_df = pd.read_csv(comid_path)
+                comid_df['ID'] = pd.to_numeric(comid_df['ID'], errors='coerce')
+
+                # Find row for this dam
+                match = comid_df[comid_df['ID'] == self.id]
+                if not match.empty:
+                    self.nwm_id = match.iloc[0]['reach_id']
+                    self.geoglows_id = match.iloc[0]['linkno']
+            else:
+                print(f"Warning: comid_table.csv not found at {comid_path}")
+        except Exception as e:
+            print(f"Error loading ID table: {e}")
+            self.nwm_id = None
+            self.geoglows_id = None
 
         if est_dam:
             # if we need to estimate dam height, we'll create guesses for each cross-section
@@ -598,6 +644,48 @@ class Dam:
 
         # update the csv file
         lhd_df.to_csv(lhd_csv, index=False)
+
+
+    def get_flow_data(self):
+        """Fetches flow data dynamically based on COMID table lookup."""
+        flow_series = None
+
+        if self.hydrology == 'National Water Model':
+            if self.nwm_id and not pd.isna(self.nwm_id):
+                try:
+                    # Locate the parquet file
+                    current_dir = os.path.dirname(os.path.abspath(__file__))
+                    project_root = os.path.dirname(current_dir)
+                    parquet_path = os.path.join(project_root, 'data', 'nwm_daily_retrospective.parquet')
+
+                    if os.path.exists(parquet_path):
+                        # Read parquet (assuming MultiIndex: time, feature_id or feature_id, time)
+                        df = pd.read_parquet(parquet_path)
+
+                        # Filter for the specific reach_id
+                        # This assumes 'feature_id' is a level in the index
+                        if 'feature_id' in df.index.names:
+                            flow_series = df.xs(int(self.nwm_id), level='feature_id')['streamflow']
+                        else:
+                            # Fallback if index is reset or different
+                            print("NWM Parquet index structure unexpected.")
+                    else:
+                        print(f"NWM Parquet not found at {parquet_path}")
+                except Exception as e:
+                    print(f"Error reading NWM data: {e}")
+
+        elif self.hydrology == 'GEOGLOWS':
+            if self.geoglows_id and not pd.isna(self.geoglows_id):
+                try:
+                    # Fetch data from GEOGLOWS API
+                    # Using bias_corrected=True as standard for retrospective analysis
+                    df = geoglows.data.retrospective(river_id=int(self.geoglows_id), bias_corrected=True)
+                    # The result has one column named after the linkno
+                    flow_series = df.iloc[:, 0]
+                except Exception as e:
+                    print(f"Error fetching GEOGLOWS data: {e}")
+
+        return flow_series
 
     def plot_rating_curves(self):
         for cross_section in self.cross_sections[1:]:

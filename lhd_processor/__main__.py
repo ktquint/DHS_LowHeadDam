@@ -387,8 +387,6 @@ def threaded_prepare_data():
                         status_var.set(f"Dam {dam_id}: Estimating fatal flows...")
                         dam.set_fatal_flows()
 
-                dam.fdc_to_csv()
-
                 for key, value in dam.__dict__.items():
                     # Check if the value is a list or numpy array
                     if isinstance(value, (list, np.ndarray)):
