@@ -69,6 +69,7 @@ def rathcelon_input(lhd_csv, output_loc, baseflow_method, nwm_parquet=None):
                     "create_reach_average_curve_file": False,
                     "known_baseflow": known_baseflow,
                     "streamflow": streamflow}
+
         dams.append(dam_dict)
 
     input_data = {"dams": dams}

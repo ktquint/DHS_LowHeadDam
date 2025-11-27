@@ -306,7 +306,7 @@ def download_dem(lhd_id: int, lat: float, lon: float, weir_length: float, dem_di
         datasets = all_datasets[2:]
 
     # Check if DEM already exists
-    dem_subdir = os.path.join(dem_dir, str(lhd_id), "DEM")
+    dem_subdir = os.path.join(dem_dir, str(lhd_id))
     os.makedirs(dem_subdir, exist_ok=True)
     dem_path = os.path.join(dem_subdir, f"{lhd_id}_MERGED_DEM.tif")
 

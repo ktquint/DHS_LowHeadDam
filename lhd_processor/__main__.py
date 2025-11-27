@@ -122,13 +122,13 @@ def select_prep_project_dir():
         prep_database_entry.insert(0, database_path)
 
         # Auto-populate other paths
-        results_path = os.path.join(project_path, "LHD_Results")
+        results_path = os.path.join(project_path, "Results")
 
         prep_dem_entry.delete(0, tk.END)
-        prep_dem_entry.insert(0, results_path)  # download_dem expects the base results folder
+        prep_dem_entry.insert(0, os.path.join(project_path, "DEM"))  # Changed to dedicated DEM folder
 
         prep_strm_entry.delete(0, tk.END)
-        prep_strm_entry.insert(0, os.path.join(project_path, "LHD_STRMs"))
+        prep_strm_entry.insert(0, os.path.join(project_path, "STRM"))
 
         prep_results_entry.delete(0, tk.END)
         prep_results_entry.insert(0, results_path)
