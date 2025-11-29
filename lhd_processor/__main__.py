@@ -1053,65 +1053,62 @@ def main():
 
     # --- Frame for Step 1: Data Preparation ---
     prep_data_frame = ttk.LabelFrame(prep_tab, text="Step 1: Prepare Data and Create Input File")
-    prep_data_frame.pack(pady=10, padx=10, fill=tk.X)
+    prep_data_frame.pack(pady=10, padx=10, fill="x")
 
-    # --- Project Directory Selection ---
-    prep_project_frame = ttk.Frame(prep_data_frame)
-    prep_project_frame.pack(pady=5, padx=10, fill=tk.X)
-    prep_project_frame.columnconfigure(1, weight=1)
-    ttk.Button(prep_project_frame, text="Select Project Folder", command=select_prep_project_dir).grid(row=0, column=0,
-                                                                                                       padx=5, pady=5,
-                                                                                                       sticky=tk.W)
-    prep_project_entry = ttk.Entry(prep_project_frame)
+    # --- Unified Paths Frame (Holds ALL file inputs) ---
+    # We create one frame to hold all 6 rows so spacing is identical
+    prep_paths_frame = ttk.Frame(prep_data_frame)
+    prep_paths_frame.pack(pady=5, padx=10, fill="x")
+    prep_paths_frame.columnconfigure(1, weight=1)
+
+    # 1. Project Folder
+    ttk.Button(prep_paths_frame, text="Select Project Folder", command=select_prep_project_dir).grid(row=0, column=0,
+                                                                                                     padx=5, pady=5,
+                                                                                                     sticky=tk.W)
+    prep_project_entry = ttk.Entry(prep_paths_frame)
     prep_project_entry.grid(row=0, column=1, padx=5, pady=5, sticky=tk.EW)
 
-    # --- Database Selection ---
-    prep_database_frame = ttk.Frame(prep_data_frame)
-    prep_database_frame.pack(pady=5, padx=10, fill=tk.X)
-    prep_database_frame.columnconfigure(1, weight=1)
-    ttk.Button(prep_database_frame, text="Select Database File (.csv)",
-               command=select_prep_database_file).grid(row=0, column=0,
-                                                       padx=5, pady=5,
-                                                       sticky=tk.W)
-    prep_database_entry = ttk.Entry(prep_database_frame)
-    prep_database_entry.grid(row=0, column=1, padx=5, pady=5, sticky=tk.EW)
+    # 2. Database File
+    ttk.Button(prep_paths_frame, text="Select Database File (.csv)", command=select_prep_database_file).grid(row=1,
+                                                                                                             column=0,
+                                                                                                             padx=5,
+                                                                                                             pady=5,
+                                                                                                             sticky=tk.W)
+    prep_database_entry = ttk.Entry(prep_paths_frame)
+    prep_database_entry.grid(row=1, column=1, padx=5, pady=5, sticky=tk.EW)
 
-    # --- Output Locations ---
-    prep_results_frame = ttk.Frame(prep_data_frame)
-    prep_results_frame.pack(pady=5, padx=10, fill=tk.X)
-    prep_results_frame.columnconfigure(1, weight=1)
-    # dem folder
-    ttk.Button(prep_results_frame, text="Select DEM Folder",
-               command=select_prep_dem_dir).grid(row=0, column=0,
-                                                 padx=5, pady=5,
-                                                 sticky=tk.W)
-    prep_dem_entry = ttk.Entry(prep_results_frame)
-    prep_dem_entry.grid(row=0, column=1, padx=5, pady=5, sticky=tk.EW)
-    # hydrography folder
-    ttk.Button(prep_results_frame, text="Select Hydrography Folder",
-               command=select_prep_strm_dir).grid(row=1, column=0,
-                                                  padx=5, pady=5,
-                                                  sticky=tk.W)
-    prep_strm_entry = ttk.Entry(prep_results_frame)
-    prep_strm_entry.grid(row=1, column=1, padx=5, pady=5, sticky=tk.EW)
-    # results folder
-    ttk.Button(prep_results_frame, text="Select Results Folder",
-               command=select_prep_results_dir).grid(row=2, column=0,
-                                                     padx=5, pady=5,
-                                                     sticky=tk.W)
-    prep_results_entry = ttk.Entry(prep_results_frame)
-    prep_results_entry.grid(row=2, column=1, padx=5, pady=5, sticky=tk.EW)
-    # RathCelon .json input
-    ttk.Button(prep_results_frame, text="RathCelon Input File (.json)",
-               command=select_prep_json_file).grid(row=3, column=0,
-                                                   padx=5, pady=5,
-                                                   sticky=tk.W)
-    prep_json_entry = ttk.Entry(prep_results_frame)
-    prep_json_entry.grid(row=3, column=1, padx=5, pady=5, sticky=tk.EW)
+    # 3. DEM Folder
+    ttk.Button(prep_paths_frame, text="Select DEM Folder", command=select_prep_dem_dir).grid(row=2, column=0, padx=5,
+                                                                                             pady=5, sticky=tk.W)
+    prep_dem_entry = ttk.Entry(prep_paths_frame)
+    prep_dem_entry.grid(row=2, column=1, padx=5, pady=5, sticky=tk.EW)
+
+    # 4. Hydrography Folder
+    ttk.Button(prep_paths_frame, text="Select Hydrography Folder", command=select_prep_strm_dir).grid(row=3, column=0,
+                                                                                                      padx=5, pady=5,
+                                                                                                      sticky=tk.W)
+    prep_strm_entry = ttk.Entry(prep_paths_frame)
+    prep_strm_entry.grid(row=3, column=1, padx=5, pady=5, sticky=tk.EW)
+
+    # 5. Results Folder
+    ttk.Button(prep_paths_frame, text="Select Results Folder", command=select_prep_results_dir).grid(row=4, column=0,
+                                                                                                     padx=5, pady=5,
+                                                                                                     sticky=tk.W)
+    prep_results_entry = ttk.Entry(prep_paths_frame)
+    prep_results_entry.grid(row=4, column=1, padx=5, pady=5, sticky=tk.EW)
+
+    # 6. RathCelon Input
+    ttk.Button(prep_paths_frame, text="RathCelon Input File (.json)", command=select_prep_json_file).grid(row=5,
+                                                                                                          column=0,
+                                                                                                          padx=5,
+                                                                                                          pady=5,
+                                                                                                          sticky=tk.W)
+    prep_json_entry = ttk.Entry(prep_paths_frame)
+    prep_json_entry.grid(row=5, column=1, padx=5, pady=5, sticky=tk.EW)
 
     # --- Hydraulics and Hydrology Settings ---
     prep_hydro_frame = ttk.Frame(prep_data_frame)
-    prep_hydro_frame.pack(pady=5, padx=10, fill=tk.X)
+    prep_hydro_frame.pack(pady=5, padx=10, fill="x")
     prep_hydro_frame.columnconfigure(1, weight=1)
     ttk.Label(prep_hydro_frame, text="Flowline Source:").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
     prep_flowline_var = tk.StringVar(value="NHDPlus")
@@ -1137,11 +1134,11 @@ def main():
     # --- Run function button (Step 1) ---
     prep_run_button = ttk.Button(prep_data_frame, text="1. Prepare Data & Create Input File", command=start_prep_thread,
                                  style="Accent.TButton")
-    prep_run_button.pack(pady=10, padx=10, fill=tk.X, ipady=5)
+    prep_run_button.pack(pady=10, padx=10, fill="x", ipady=5)
 
     # --- Frame for Step 2: Run Rathcelon ---
     run_rathcelon_frame = ttk.LabelFrame(prep_tab, text="Step 2: Run Rathcelon Processing")
-    run_rathcelon_frame.pack(pady=10, padx=10, fill=tk.X)
+    run_rathcelon_frame.pack(pady=10, padx=10, fill="x")
     run_rathcelon_frame.columnconfigure(1, weight=1)
 
     ttk.Button(run_rathcelon_frame, text="Select Input File (.json)", command=select_rathcelon_json_file).grid(row=0,
@@ -1165,7 +1162,7 @@ def main():
 
     # --- Analysis: Database and Results Paths ---
     analysis_path_frame = ttk.LabelFrame(analysis_tab, text="3. Select Results to Analyze")
-    analysis_path_frame.pack(pady=10, padx=10, fill=tk.X, side=tk.TOP)
+    analysis_path_frame.pack(pady=10, padx=10, fill="x", side="top")
     analysis_path_frame.columnconfigure(1, weight=1)
     ttk.Button(analysis_path_frame, text="Select Database File (.csv)", command=select_analysis_csv_file).grid(row=0,
                                                                                                                column=0,
@@ -1189,7 +1186,7 @@ def main():
 
     # --- Analysis: Run Buttons ---
     analysis_button_frame = ttk.Frame(analysis_tab)
-    analysis_button_frame.pack(pady=10, fill=tk.X, padx=10, side=tk.TOP)
+    analysis_button_frame.pack(pady=10, fill="x", padx=10, side="top")
     analysis_button_frame.columnconfigure(0, weight=1)
     # --- Column 1 configure REMOVED ---
     analysis_run_button = ttk.Button(analysis_button_frame, text="3. Analyze & Save All Dam Data",
@@ -1200,7 +1197,7 @@ def main():
 
     # --- Analysis: Figure Display Options ---
     analysis_figure_frame = ttk.LabelFrame(analysis_tab, text="Select Figures to Display")
-    analysis_figure_frame.pack(pady=10, padx=10, fill=tk.X, side=tk.TOP)
+    analysis_figure_frame.pack(pady=10, padx=10, fill="x", side="top")
     analysis_figure_frame.columnconfigure(0, weight=1)
     analysis_figure_frame.columnconfigure(1, weight=1)
 
@@ -1245,10 +1242,10 @@ def main():
 
     # --- Analysis: Display Button ---
     analysis_display_button_frame = ttk.Frame(analysis_tab)
-    analysis_display_button_frame.pack(pady=10, fill=tk.X, padx=10, side=tk.TOP)
+    analysis_display_button_frame.pack(pady=10, fill="x", padx=10, side="top")
     analysis_display_button = ttk.Button(analysis_display_button_frame, text="4. Generate & Display Dam Figures",
                                          command=start_display_dam_figures_thread, style="Accent.TButton")
-    analysis_display_button.pack(fill=tk.X, ipady=5)
+    analysis_display_button.pack(fill="x", ipady=5)
 
     # --- Analysis: Figure Viewer Frame ---
     analysis_figure_viewer_frame = ttk.LabelFrame(analysis_tab, text="Figure Viewer")
@@ -1256,18 +1253,18 @@ def main():
 
     # This frame will hold the controls (buttons, label) - PACKED FIRST
     analysis_figure_controls_frame = ttk.Frame(analysis_figure_viewer_frame)
-    analysis_figure_controls_frame.pack(fill="x", pady=5, side=tk.TOP)  # Explicitly pack at the top
+    analysis_figure_controls_frame.pack(fill="x", pady=5, side="top")  # Explicitly pack at the top
 
     prev_button = ttk.Button(analysis_figure_controls_frame, text="< Previous", command=on_prev_figure)
-    prev_button.pack(side=tk.LEFT, padx=10)
+    prev_button.pack(side="left", padx=10)
 
     next_button = ttk.Button(analysis_figure_controls_frame, text="Next >", command=on_next_figure)
-    next_button.pack(side=tk.RIGHT, padx=10)
+    next_button.pack(side="right", padx=10)
 
     analysis_figure_label_var = tk.StringVar(value="No figure loaded.")
     analysis_figure_label = ttk.Label(analysis_figure_controls_frame, textvariable=analysis_figure_label_var,
-                                      anchor=tk.CENTER)
-    analysis_figure_label.pack(side=tk.LEFT, fill="x", expand=True)
+                                      anchor="center")
+    analysis_figure_label.pack(side="left", fill="x", expand=True)
 
     # This frame will hold the matplotlib canvas - PACKED SECOND
     analysis_figure_canvas_frame = ttk.Frame(analysis_figure_viewer_frame)
@@ -1285,8 +1282,8 @@ def main():
     """
     status_var = tk.StringVar()
     status_var.set("Ready. Please select a Project Folder in the 'Preparation' tab to begin.")
-    status_label = ttk.Label(root, textvariable=status_var, relief=tk.SUNKEN, anchor=tk.W, padding=5)
-    status_label.pack(side=tk.BOTTOM, fill=tk.X, ipady=2)
+    status_label = ttk.Label(root, textvariable=status_var, relief="sunken", anchor="w", padding=5)
+    status_label.pack(side="bottom", fill="x", ipady=2)
 
     root.mainloop()
 
